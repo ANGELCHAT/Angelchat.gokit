@@ -12,7 +12,7 @@ import (
 	"sync"
 	"time"
 
-	"github.com/colchis/investor/internal/platform/log"
+	"github.com/sokool/gokit/log"
 )
 
 // Wrapper wraps Endpoint with extra behavior such as logging, decoding, encoding, instrumentation, load balancing...
@@ -101,7 +101,7 @@ func Response(kind string, d Decoder) Wrapper {
 			}
 
 			if res.Header.Get("Content-type") != kind {
-				return res, errors.New("wrong response content-type header, expected " + kind)
+				return res, errors.New("wrong response content-type header, expected " + kind + " has: " + res.Header.Get("Content-type"))
 			}
 
 			// copy out body stream to s
