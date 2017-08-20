@@ -1,57 +1,77 @@
 package log
 
-//import (
-//	"fmt"
-//	"io"
-//	"log"
-//	"os"
-//	"regexp"
-//)
-//
-//type Logger interface {
-//	Info(namespace, message string, arguments ...interface{})
-//	Debug(namespace, message string, arguments ...interface{})
-//	Error(namespace, message string, arguments ...interface{})
-//	Subscribe(w io.Writer, ns ...string) Logger
-//}
-//
-//type defLog struct {
-//	log         *log.Logger
-//	subscribers map[string][]*log.Logger
-//}
-//
-//const (
-//	red    = "\x1b[31;1m%s\x1b[0m"
-//	green  = "\x1b[32;1m%s\x1b[0m"
-//	yellow = "\x1b[33;1m%s\x1b[0m"
-//)
-//
-//func (l *defLog) Error(n, m string, a ...interface{}) {
-//	m = fmt.Sprintf(red, m)
-//	n = fmt.Sprintf(red, n)
-//
-//	l.log.Println(l.output(n, m, a...))
-//}
-//
-//func (l *defLog) Info(n, m string, a ...interface{}) {
-//	m = fmt.Sprintf(green, m)
-//	n = fmt.Sprintf(green, n)
-//
-//	l.log.Println(l.output(n, m, a...))
-//
-//}
-//
-//func (l *defLog) Debug(n, m string, a ...interface{}) {
-//	if !Debugging {
-//		return
-//	}
-//
-//	m = fmt.Sprintf(yellow, m)
-//	n = fmt.Sprintf(yellow, n)
-//
-//	l.log.Println(l.output(n, m, a...))
-//}
-//
+import (
+	"fmt"
+	"io"
+	"sync"
+	"strings"
+)
+
+type Log struct {
+	opt *Options
+	mu  sync.Mutex
+}
+
+const (
+	red    = "\x1b[31;1m%s\x1b[0m"
+	green  = "\x1b[32;1m%s\x1b[0m"
+	yellow = "\x1b[33;1m%s\x1b[0m"
+)
+
+var Default *Log = New()
+
+func (l *Log) Info(tag, msg string, args ...interface{}) {
+	l.write(l.opt.Info, green, tag, msg, args...)
+}
+
+func (l *Log) Debug(tag, msg string, args ...interface{}) {
+	l.write(l.opt.Debug, yellow, tag, msg, args...)
+}
+
+func (l *Log) Error(tag string, e error) {
+	l.write(l.opt.Error, red, tag, e.Error())
+}
+
+func (l *Log) write(w io.Writer, color, space, msg string, args ...interface{}) {
+	l.mu.Lock()
+	defer l.mu.Unlock()
+
+	msg = fmt.Sprintf("%s: %s", space, fmt.Sprintf(msg, args...))
+	if len(strings.TrimSpace(space)) == 0 {
+		msg = msg[len(space)+2:]
+	}
+
+	if l.opt.OutputDecoratorFunc != nil {
+		msg = l.opt.OutputDecoratorFunc(msg)
+	}
+
+	if l.opt.Colors {
+		fmt.Fprintln(w, fmt.Sprintf(color, msg))
+		return
+	}
+
+	fmt.Fprintln(w, msg)
+}
+
+func New(os ...Option) *Log {
+	return &Log{
+		opt: newOptions(os...),
+	}
+}
+
+func Info(tag, msg string, args ...interface{}) {
+	Default.Info(tag, msg, args...)
+}
+
+func Debug(tag, msg string, args ...interface{}) {
+	Default.Debug(tag, msg, args...)
+}
+
+func Error(space string, e error) {
+	Default.Error(space, e)
+}
+
+
 //func (l *defLog) Subscribe(w io.Writer, ns ...string) Logger {
 //	i := log.New(w, "", l.log.Flags())
 //	if len(ns) == 0 {
@@ -101,11 +121,4 @@ package log
 //
 //	}
 //
-//}
-//
-//func New(w io.Writer, f int) Logger {
-//	return &defLog{
-//		log:         log.New(w, "", f),
-//		subscribers: make(map[string][]*log.Logger),
-//	}
 //}

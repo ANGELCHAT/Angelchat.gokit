@@ -5,29 +5,71 @@ import (
 
 	"fmt"
 
+	"time"
+
 	"github.com/sokool/gokit/log"
+	"github.com/sokool/gokit/test/is"
 )
 
-func TestNew(t *testing.T) {
-	tw := newTw()
+type testCase struct {
+	tag    string
+	msg    string
+	args   []interface{}
+	output string
+}
 
+func TestOutputWriters(t *testing.T) {
+	w := newTw()
 	l := log.New(
-		log.InfoWriter(tw),
+		log.InfoWriter(w),
+		log.DebugWriter(w),
+		log.ErrorWriter(w),
+		log.NoColors(),
 	)
 
-	log.Info("", "b")
-
-	tc := map[string]string{
-		"log.test.info":          "info testing",
-		"some.strange.namespace": "info testing",
-		"": "none message",
+	tc := []testCase{
+		{
+			"log.test",
+			"message 1:%s, 2: %s",
+			[]interface{}{"one", "two"},
+			"log.test: message 1:one, 2: two\n"},
+		{
+			"    ",
+			"message",
+			nil,
+			"message\n"},
+		{
+			"",
+			"message",
+			nil,
+			"message\n"},
+		{
+			"log.test",
+			"",
+			nil,
+			"log.test: \n"},
 	}
 
-	for namespace, message := range tc {
-		l.Info(namespace, message)
-		fmt.Print(tw.Last())
-	}
+	for _, c := range tc {
+		l.Info(c.tag, c.msg, c.args...)
+		is.Equal(t, c.output, w.read())
 
+		l.Debug(c.tag, c.msg, c.args...)
+		is.Equal(t, c.output, w.read())
+
+		l.Error(c.tag, fmt.Errorf(c.msg, c.args...))
+		is.Equal(t, c.output, w.read())
+	}
+}
+
+func TestOutputDecorator(t *testing.T) {
+	l := log.New(
+		log.NoColors(),
+		log.OutputDecorator(func(s string) string {
+			return time.Now().Format("15:04:05 ") + s
+		}))
+
+	l.Info("log.decorator.test", "%s world", "hello")
 }
 
 type tw struct {
@@ -41,7 +83,7 @@ func (t *tw) Write(b []byte) (int, error) {
 	return len(b), nil
 }
 
-func (t *tw) Last() string {
+func (t *tw) read() string {
 	return t.m
 }
 
