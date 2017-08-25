@@ -2,7 +2,7 @@ package log
 
 import (
 	"io"
-	"os"
+	"log"
 )
 
 type Options struct {
@@ -10,27 +10,27 @@ type Options struct {
 	Error               io.Writer
 	Debug               io.Writer
 	Colors              bool
-	Subscribers         map[string]io.Writer
+	OutputHandlers      map[string][]io.Writer
 	OutputDecoratorFunc func(s string) string
 }
 
 type Option func(*Options)
 
-func InfoWriter(l io.Writer) Option {
+func InfoWriter(w io.Writer) Option {
 	return func(o *Options) {
-		o.Info = l
+		o.Info = w
 	}
 }
 
-func ErrorWriter(l io.Writer) Option {
+func ErrorWriter(w io.Writer) Option {
 	return func(o *Options) {
-		o.Error = l
+		o.Error = w
 	}
 }
 
-func DebugWriter(l io.Writer) Option {
+func DebugWriter(w io.Writer) Option {
 	return func(o *Options) {
-		o.Debug = l
+		o.Debug = w
 	}
 }
 
@@ -46,24 +46,40 @@ func OutputDecorator(fn func(string) string) Option {
 	}
 }
 
-//func Listen(w io.Writer, namespaces ...string) Option {
-//	return func(o *Options) {
-//		for _, n := range namespaces {
-//			o.Subscribers[n] = w
-//		}
-//	}
-//}
+func OutputHandler(w io.Writer, tags ...string) Option {
+	return func(o *Options) {
+		for _, n := range tags {
+			o.OutputHandlers[n] = append(o.OutputHandlers[n], w)
+		}
+	}
+}
 
 func newOptions(ops ...Option) *Options {
 	s := &Options{
-		Info:   os.Stdout,
-		Error:  os.Stderr,
-		Debug:  os.Stdout,
-		Colors: true,
+		Colors:         true,
+		OutputHandlers: make(map[string][]io.Writer),
 	}
 
 	for _, o := range ops {
 		o(s)
+	}
+
+	var p []string
+
+	if s.Info == nil {
+		p = append(p, "InfoWriter")
+	}
+
+	if s.Debug == nil {
+		p = append(p, "DebugWriter")
+	}
+
+	if s.Error == nil {
+		p = append(p, "ErrorWriter")
+	}
+
+	if len(p) != 0 {
+		log.Printf("no %v ware attached\n", p)
 	}
 
 	return s

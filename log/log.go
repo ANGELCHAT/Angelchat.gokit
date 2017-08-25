@@ -3,11 +3,14 @@ package log
 import (
 	"fmt"
 	"io"
-	"sync"
+	"log"
+	"os"
+	"regexp"
 	"strings"
+	"sync"
 )
 
-type Log struct {
+type Logger struct {
 	opt *Options
 	mu  sync.Mutex
 }
@@ -18,34 +21,51 @@ const (
 	yellow = "\x1b[33;1m%s\x1b[0m"
 )
 
-var Default *Log = New()
+var Default *Logger = New(
+	InfoWriter(os.Stdout),
+	DebugWriter(os.Stdout),
+	ErrorWriter(os.Stdout),
+)
 
-func (l *Log) Info(tag, msg string, args ...interface{}) {
+func (l *Logger) Info(tag, msg string, args ...interface{}) {
 	l.write(l.opt.Info, green, tag, msg, args...)
 }
 
-func (l *Log) Debug(tag, msg string, args ...interface{}) {
+func (l *Logger) Debug(tag, msg string, args ...interface{}) {
 	l.write(l.opt.Debug, yellow, tag, msg, args...)
 }
 
-func (l *Log) Error(tag string, e error) {
+func (l *Logger) Error(tag string, e error) {
 	l.write(l.opt.Error, red, tag, e.Error())
 }
 
-func (l *Log) write(w io.Writer, color, space, msg string, args ...interface{}) {
+func (l *Logger) write(w io.Writer, color, tag, msg string, args ...interface{}) {
+	if w == nil && len(l.opt.OutputHandlers) == 0 {
+		return
+	}
+
 	l.mu.Lock()
 	defer l.mu.Unlock()
 
-	msg = fmt.Sprintf("%s: %s", space, fmt.Sprintf(msg, args...))
-	if len(strings.TrimSpace(space)) == 0 {
-		msg = msg[len(space)+2:]
+	msg = fmt.Sprintf("%s: %s", tag, fmt.Sprintf(msg, args...))
+	if len(strings.TrimSpace(tag)) == 0 {
+		msg = msg[len(tag)+2:]
 	}
 
 	if l.opt.OutputDecoratorFunc != nil {
 		msg = l.opt.OutputDecoratorFunc(msg)
 	}
 
-	if l.opt.Colors {
+	if l.opt.OutputHandlers != nil {
+
+		fmt.Fprintln(l.mergeOutputHandlers(tag), msg)
+	}
+
+	if w == nil {
+		return
+	}
+
+	if l.opt.Colors && len(color) != 0 {
 		fmt.Fprintln(w, fmt.Sprintf(color, msg))
 		return
 	}
@@ -53,8 +73,28 @@ func (l *Log) write(w io.Writer, color, space, msg string, args ...interface{}) 
 	fmt.Fprintln(w, msg)
 }
 
-func New(os ...Option) *Log {
-	return &Log{
+func (l *Logger) mergeOutputHandlers(tag string) io.Writer {
+	var writers []io.Writer
+
+	for p, ws := range l.opt.OutputHandlers {
+		ok, err := regexp.MatchString(p, tag)
+		if err != nil {
+			log.Printf("output handler tag has %s", err.Error())
+		}
+
+		if !ok {
+			continue
+		}
+
+		writers = append(writers, ws...)
+
+	}
+
+	return io.MultiWriter(writers...)
+}
+
+func New(os ...Option) *Logger {
+	return &Logger{
 		opt: newOptions(os...),
 	}
 }
@@ -67,10 +107,9 @@ func Debug(tag, msg string, args ...interface{}) {
 	Default.Debug(tag, msg, args...)
 }
 
-func Error(space string, e error) {
-	Default.Error(space, e)
+func Error(tag string, e error) {
+	Default.Error(tag, e)
 }
-
 
 //func (l *defLog) Subscribe(w io.Writer, ns ...string) Logger {
 //	i := log.New(w, "", l.log.Flags())
