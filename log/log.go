@@ -6,97 +6,101 @@ import (
 	"log"
 	"os"
 	"regexp"
-	"strings"
 	"sync"
 )
+
+type kind int
 
 type Logger struct {
 	opt *Options
 	mu  sync.Mutex
 }
 
+type Message struct {
+	Tag   string
+	Text  string
+	Args  []interface{}
+	Kind  kind
+	Color string
+}
+
 const (
 	red    = "\x1b[31;1m%s\x1b[0m"
 	green  = "\x1b[32;1m%s\x1b[0m"
 	yellow = "\x1b[33;1m%s\x1b[0m"
+
+	info kind = iota
+	debug
+	err
+	tag
 )
 
 var Default *Logger = New(
-	InfoWriter(os.Stdout),
-	DebugWriter(os.Stdout),
-	ErrorWriter(os.Stdout),
+	Levels(os.Stdout, os.Stdout, os.Stderr),
 )
 
 func (l *Logger) Info(tag, msg string, args ...interface{}) {
-	l.write(l.opt.Info, green, tag, msg, args...)
+	l.write(l.opt.Info, Message{
+		tag,
+		msg,
+		args,
+		info,
+		green},
+	)
 }
 
 func (l *Logger) Debug(tag, msg string, args ...interface{}) {
-	l.write(l.opt.Debug, yellow, tag, msg, args...)
+	l.write(l.opt.Debug, Message{
+		tag,
+		msg,
+		args,
+		debug,
+		yellow},
+	)
+
 }
 
 func (l *Logger) Error(tag string, e error) {
-	l.write(l.opt.Error, red, tag, e.Error())
+	l.write(l.opt.Error, Message{
+		tag,
+		e.Error(),
+		nil,
+		err,
+		red},
+	)
 }
 
-func (l *Logger) write(w io.Writer, color, tag, msg string, args ...interface{}) {
-	if w == nil && len(l.opt.OutputHandlers) == 0 {
-		return
-	}
-
+func (l *Logger) write(w io.Writer, m Message) {
 	l.mu.Lock()
 	defer l.mu.Unlock()
 
-	msg = fmt.Sprintf("%s: %s", tag, fmt.Sprintf(msg, args...))
-	if len(strings.TrimSpace(tag)) == 0 {
-		msg = msg[len(tag)+2:]
+	if w != nil {
+		fmt.Fprintln(w, l.opt.Formatter(m))
 	}
 
-	if l.opt.OutputDecoratorFunc != nil {
-		msg = l.opt.OutputDecoratorFunc(msg)
-	}
+	m.Kind = tag
+	for t, writers := range l.opt.Tags {
+		for _, w := range writers {
+			ok, err := regexp.MatchString(t, m.Tag)
+			if err != nil {
+				log.Printf("output handler tag has %s", err.Error())
+			}
 
-	if l.opt.OutputHandlers != nil {
+			if !ok {
+				continue
+			}
 
-		fmt.Fprintln(l.mergeOutputHandlers(tag), msg)
-	}
-
-	if w == nil {
-		return
-	}
-
-	if l.opt.Colors && len(color) != 0 {
-		fmt.Fprintln(w, fmt.Sprintf(color, msg))
-		return
-	}
-
-	fmt.Fprintln(w, msg)
-}
-
-func (l *Logger) mergeOutputHandlers(tag string) io.Writer {
-	var writers []io.Writer
-
-	for p, ws := range l.opt.OutputHandlers {
-		ok, err := regexp.MatchString(p, tag)
-		if err != nil {
-			log.Printf("output handler tag has %s", err.Error())
+			fmt.Fprintln(w, l.opt.Formatter(m))
 		}
-
-		if !ok {
-			continue
-		}
-
-		writers = append(writers, ws...)
-
 	}
-
-	return io.MultiWriter(writers...)
 }
 
 func New(os ...Option) *Logger {
-	return &Logger{
+	l := &Logger{
 		opt: newOptions(os...),
 	}
+
+	return l
 }
 
 func Info(tag, msg string, args ...interface{}) {

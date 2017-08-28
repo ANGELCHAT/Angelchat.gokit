@@ -11,231 +11,177 @@ import (
 	"github.com/sokool/gokit/test/is"
 )
 
-type testCase struct {
-	tag      string
-	msg      string
-	args     []interface{}
+type input struct {
+	tag string
+	msg string
+	arg []interface{}
+}
+
+type test struct {
+	given    input
 	expected string
 }
 
-func TestOutputWriting(t *testing.T) {
-	infoOut := &bytes.Buffer{}
-	debugOut := &bytes.Buffer{}
-	errorOut := &bytes.Buffer{}
+func TestLevelWriters(t *testing.T) {
+	log.Info("default.info", "raz %d", 1)
+	log.Debug("default.debug", "dwa %d %s", 2, "dwa")
+	log.Error("default.errror", fmt.Errorf("ouh!"))
+
+	info := &bytes.Buffer{}
+	debug := &bytes.Buffer{}
+	err := &bytes.Buffer{}
 
 	logger := log.New(
-		log.NoColors(),
-		log.InfoWriter(infoOut),
-		log.DebugWriter(debugOut),
-		log.ErrorWriter(errorOut),
+		log.Levels(info, debug, err),
+		log.MessageFormat(false),
 	)
 
-	tc := []testCase{
+	tc := []test{
 		{
-			"log.test",
-			"message 1:%s, 2: %s",
-			[]interface{}{"one", "two"},
+			input{"log.test", "message 1:%s, 2: %s", []interface{}{"one", "two"}},
 			"log.test: message 1:one, 2: two\n"},
 		{
-			"    ",
-			"message",
-			nil,
+			input{"    ", "message", nil},
 			"message\n"},
 		{
-			"",
-			"message",
-			nil,
+			input{"", "message", nil},
 			"message\n"},
 		{
-			"log.test",
-			"",
-			nil,
+			input{"log.test", "", nil},
 			"log.test: \n"},
 	}
 
-	for _, c := range tc {
-		logger.Info(c.tag, c.msg, c.args...)
-		is.Equal(t, c.expected, read(infoOut))
+	for _, d := range tc {
+		logger.Info(d.given.tag, d.given.msg, d.given.arg...)
+		is.Equal(t, d.expected, read(info))
 
-		logger.Debug(c.tag, c.msg, c.args...)
-		is.Equal(t, c.expected, read(debugOut))
+		logger.Debug(d.given.tag, d.given.msg, d.given.arg...)
+		is.Equal(t, d.expected, read(debug))
 
-		logger.Error(c.tag, fmt.Errorf(c.msg, c.args...))
-		is.Equal(t, c.expected, read(errorOut))
+		logger.Error(d.given.tag, fmt.Errorf(d.given.msg, d.given.arg...))
+		is.Equal(t, d.expected, read(err))
 	}
 }
 
-func TestOutputDecorator(t *testing.T) {
+func TestCustomMessageFormat(t *testing.T) {
 	output := &bytes.Buffer{}
 	prefix := "time.Now() "
 
 	logger := log.New(
-		log.NoColors(),
-		log.InfoWriter(output),
-		log.DebugWriter(output),
-		log.ErrorWriter(output),
-		log.OutputDecorator(func(s string) string {
-			return fmt.Sprintf("%s%s", prefix, s)
-		}))
+		log.Levels(output, output, output),
+		log.Formatter(func(m log.Message) string {
+			return fmt.Sprintf("%s%s", prefix, m.Text)
+		}),
+	)
 
 	logger.Info("log.decorator.info", "msg0")
-	is.Equal(t, prefix+"log.decorator.info: msg0\n", read(output))
+	is.Equal(t, prefix+"msg0\n", read(output))
 
 	logger.Debug("log.decorator.debug", "msg1")
-	is.Equal(t, prefix+"log.decorator.debug: msg1\n", read(output))
+	is.Equal(t, prefix+"msg1\n", read(output))
 
 	logger.Error("log.decorator.error", fmt.Errorf("msg2"))
-	is.Equal(t, prefix+"log.decorator.error: msg2\n", read(output))
+	is.Equal(t, prefix+"msg2\n", read(output))
 }
 
-func TestOutputHandler(t *testing.T) {
+func TestTagWriter(t *testing.T) {
 	var logger *log.Logger
-	output := &bytes.Buffer{}
-	outputHandler := &bytes.Buffer{}
+	var tag *bytes.Buffer = &bytes.Buffer{}
 
 	// with empty Info, Debug, Error writers.
 	logger = log.New(
-		log.OutputHandler(outputHandler, ".*"),
+		// everything goes into tags writer
+		log.Tags(tag, "^.*$"),
+		log.MessageFormat(false),
 	)
 
-	// info
-	logger.Info("", "message0")
-	is.Equal(t, "message0\n", read(outputHandler))
+	td := []test{
+		{
+			input{"", "message0", nil},
+			"message0\n"},
+		{
+			input{"log.infoIn", "message1", nil},
+			"log.infoIn: message1\n"},
+		{
+			input{"some.tag.example", "message2", nil},
+			"some.tag.example: message2\n"},
+		{
+			input{"  a.b.c ", "out %s %s", []interface{}{"a", "b"}},
+			"  a.b.c : out a b\n"},
+	}
 
-	logger.Info("log.info", "message1")
-	is.Equal(t, "log.info: message1\n", read(outputHandler))
+	for _, d := range td {
+		logger.Info(d.given.tag, d.given.msg, d.given.arg...)
+		is.Equal(t, d.expected, read(tag))
 
-	logger.Info("some.tag.example", "message2")
-	is.Equal(t, "some.tag.example: message2\n", read(outputHandler))
+		logger.Debug(d.given.tag, d.given.msg, d.given.arg...)
+		is.Equal(t, d.expected, read(tag))
 
-	// debug
-	logger.Debug("", "message0")
-	is.Equal(t, "message0\n", read(outputHandler))
+		logger.Error(d.given.tag, fmt.Errorf(d.given.msg, d.given.arg...))
+		is.Equal(t, d.expected, read(tag))
+	}
 
-	logger.Debug("log.info", "message1")
-	is.Equal(t, "log.info: message1\n", read(outputHandler))
-
-	logger.Debug("some.tag.example", "message2")
-	is.Equal(t, "some.tag.example: message2\n", read(outputHandler))
-
-	// error
-	logger.Error("", fmt.Errorf("message0"))
-	is.Equal(t, "message0\n", read(outputHandler))
-
-	logger.Error("log.info", fmt.Errorf("message1"))
-	is.Equal(t, "log.info: message1\n", read(outputHandler))
-
-	logger.Error("some.tag.example", fmt.Errorf("message2"))
-	is.Equal(t, "some.tag.example: message2\n", read(outputHandler))
-
+	// test one tag writer with multiple tags
 	logger = log.New(
-		log.InfoWriter(output),
-		log.DebugWriter(output),
-		log.ErrorWriter(output),
-		log.OutputHandler(outputHandler, ".*"),
+		log.Tags(tag, "^log.handler.*$", "^log.test$"),
+		log.MessageFormat(false),
 	)
 
-	// info
-	logger.Info("", "message0")
-	is.Equal(t, "message0\n", read(outputHandler))
+	given := []input{
+		{"log", "msg0", nil},
+		{"log.handler", "msg1", nil},
+		{"log.handler.a", "msg2", nil},
+		{"log.handler.b", "msg3", nil},
+		{"log.handler.b.c", "msg4", nil},
+		{"log.test", "msg5", nil},
+		{"log.test.a", "msg6", nil},
+		{"log.test.a.b", "msg7", nil},
+	}
 
-	logger.Info("log.info", "message1")
-	is.Equal(t, "log.info: message1\n", read(outputHandler))
-
-	logger.Info("some.tag.example", "message2")
-	is.Equal(t, "some.tag.example: message2\n", read(outputHandler))
-
-	// debug
-	logger.Debug("", "message0")
-	is.Equal(t, "message0\n", read(outputHandler))
-
-	logger.Debug("log.info", "message1")
-	is.Equal(t, "log.info: message1\n", read(outputHandler))
-
-	logger.Debug("some.tag.example", "message2")
-	is.Equal(t, "some.tag.example: message2\n", read(outputHandler))
-
-	// error
-	logger.Error("", fmt.Errorf("message0"))
-	is.Equal(t, "message0\n", read(outputHandler))
-
-	logger.Error("log.info", fmt.Errorf("message1"))
-	is.Equal(t, "log.info: message1\n", read(outputHandler))
-
-	logger.Error("some.tag.example", fmt.Errorf("message2"))
-	is.Equal(t, "some.tag.example: message2\n", read(outputHandler))
-
-	h1Tag1 := "^log.handler.*$"
-	h1Tag2 := "^log.test$"
-	o := `log.handler: msg1
+	expects := `log.handler: msg1
 log.handler.a: msg2
 log.handler.b: msg3
 log.handler.b.c: msg4
 log.test: msg5
 `
 
-	h1Out := &bytes.Buffer{}
+	for _, data := range given {
+		logger.Info(data.tag, data.msg, data.arg...)
+	}
+	is.Equal(t, expects, read(tag))
+
+	//
+	infoIn, aTagIn, bTagIn := &bytes.Buffer{}, &bytes.Buffer{}, &bytes.Buffer{}
 	logger = log.New(
-		log.OutputHandler(h1Out, h1Tag1, h1Tag2),
-	)
-
-	logger.Info("log", "msg0")
-	logger.Info("log.handler", "msg1")
-	logger.Info("log.handler.a", "msg2")
-	logger.Info("log.handler.b", "msg3")
-	logger.Info("log.handler.b.c", "msg4")
-	logger.Info("log.test", "msg5")
-	logger.Info("log.test.a", "msg6")
-	logger.Info("log.test.a.b", "msg7")
-
-	is.Equal(t, o, read(h1Out))
-
-	h1 := &bytes.Buffer{}
-	h2 := &bytes.Buffer{}
-	h3 := &bytes.Buffer{}
-
-	logger = log.New(
-		log.NoColors(),
-		log.InfoWriter(h3),
-		log.OutputHandler(h1, "^a.log$"),
-		log.OutputHandler(h2, "^b.log$"),
+		log.Levels(infoIn, nil, nil),
+		log.Tags(aTagIn, "^a.log$"),
+		log.Tags(bTagIn, "^b.log$"),
+		log.MessageFormat(false),
 	)
 
 	logger.Info("a.log", "msg1")
-	logger.Error("a.log", fmt.Errorf("msg2"))
-	logger.Debug("a.log", "msg2")
+	logger.Info("b.log", "msg2")
 
-	logger.Info("b.log", "msg3")
-	logger.Error("b.log", fmt.Errorf("msg4"))
-	logger.Debug("b.log", "msg5")
+	logger.Debug("a.log", "msg3")
+	logger.Debug("b.log", "msg4")
 
-	o1 := `a.log: msg1
-a.log: msg2
-a.log: msg2
+	logger.Error("a.log", fmt.Errorf("msg5"))
+	logger.Error("b.log", fmt.Errorf("msg6"))
+
+	aTagOut := `a.log: msg1
+a.log: msg3
+a.log: msg5
 `
-	is.Equal(t, o1, read(h1))
-
-	o2 := `b.log: msg3
+	bTagOut := `b.log: msg2
 b.log: msg4
-b.log: msg5
+b.log: msg6
 `
-	is.Equal(t, o2, read(h2))
-
-	o3 := `a.log: msg1
-b.log: msg3
+	infoOut := `a.log: msg1
+b.log: msg2
 `
-	is.Equal(t, o3, read(h3))
-
-}
-
-func TestNoDebugOutput(t *testing.T) {
-	out := &bytes.Buffer{}
-
-	log.New().Debug("tag", "message")
-	is.True(t, read(out) == "", "empty output expected")
-
-	log.New(log.DebugWriter(out)).Debug("tag", "message")
-	is.True(t, read(out) != "", "debug output expected")
+	is.Equal(t, aTagOut, read(aTagIn))
+	is.Equal(t, bTagOut, read(bTagIn))
+	is.Equal(t, infoOut, read(infoIn))
 
 }
 

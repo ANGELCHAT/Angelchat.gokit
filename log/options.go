@@ -1,85 +1,73 @@
 package log
 
 import (
+	"fmt"
 	"io"
-	"log"
+	"strings"
 )
 
+type FormatterFunc func(Message) string
+
 type Options struct {
-	Info                io.Writer
-	Error               io.Writer
-	Debug               io.Writer
-	Colors              bool
-	OutputHandlers      map[string][]io.Writer
-	OutputDecoratorFunc func(s string) string
+	Info        io.Writer
+	Error       io.Writer
+	Debug       io.Writer
+	Formatter   FormatterFunc
+	TagHandlers []func(Message)
+	Tags        map[string][]io.Writer
 }
 
 type Option func(*Options)
 
-func InfoWriter(w io.Writer) Option {
+func Levels(info, debug, error io.Writer) Option {
 	return func(o *Options) {
-		o.Info = w
+		o.Info, o.Debug, o.Error = info, debug, error
 	}
 }
 
-func ErrorWriter(w io.Writer) Option {
+func Tags(w io.Writer, tags ...string) Option {
 	return func(o *Options) {
-		o.Error = w
+		for _, t := range tags {
+			o.Tags[t] = append(o.Tags[t], w)
+		}
 	}
 }
 
-func DebugWriter(w io.Writer) Option {
+func Formatter(f FormatterFunc) Option {
 	return func(o *Options) {
-		o.Debug = w
+		o.Formatter = f
 	}
 }
 
-func NoColors() Option {
+func MessageFormat(colors bool) Option {
 	return func(o *Options) {
-		o.Colors = false
-	}
-}
+		o.Formatter = func(m Message) string {
+			message := fmt.Sprintf("%s: %s", m.Tag, fmt.Sprintf(m.Text, m.Args...))
+			if len(strings.TrimSpace(m.Tag)) == 0 {
+				message = message[len(m.Tag)+2:]
+			}
 
-func OutputDecorator(fn func(string) string) Option {
-	return func(o *Options) {
-		o.OutputDecoratorFunc = fn
-	}
-}
+			if colors && len(m.Color) != 0 {
+				message = fmt.Sprintf(m.Color, message)
+			}
 
-func OutputHandler(w io.Writer, tags ...string) Option {
-	return func(o *Options) {
-		for _, n := range tags {
-			o.OutputHandlers[n] = append(o.OutputHandlers[n], w)
+			return message
 		}
 	}
 }
 
 func newOptions(ops ...Option) *Options {
 	s := &Options{
-		Colors:         true,
-		OutputHandlers: make(map[string][]io.Writer),
+		Tags:        make(map[string][]io.Writer),
+		TagHandlers: []func(Message){},
 	}
 
 	for _, o := range ops {
 		o(s)
 	}
 
-	var p []string
-
-	if s.Info == nil {
-		p = append(p, "InfoWriter")
-	}
-
-	if s.Debug == nil {
-		p = append(p, "DebugWriter")
-	}
-
-	if s.Error == nil {
-		p = append(p, "ErrorWriter")
-	}
-
-	if len(p) != 0 {
-		log.Printf("no %v ware attached\n", p)
+	if s.Formatter == nil {
+		MessageFormat(true)(s)
 	}
 
 	return s
