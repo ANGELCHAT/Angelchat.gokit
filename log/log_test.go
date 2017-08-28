@@ -23,9 +23,6 @@ type test struct {
 }
 
 func TestLevelWriters(t *testing.T) {
-	log.Info("default.info", "raz %d", 1)
-	log.Debug("default.debug", "dwa %d %s", 2, "dwa")
-	log.Error("default.errror", fmt.Errorf("ouh!"))
 
 	info := &bytes.Buffer{}
 	debug := &bytes.Buffer{}
@@ -63,7 +60,7 @@ func TestLevelWriters(t *testing.T) {
 	}
 }
 
-func TestCustomMessageFormat(t *testing.T) {
+func TestMessageFormat(t *testing.T) {
 	output := &bytes.Buffer{}
 	prefix := "time.Now() "
 
