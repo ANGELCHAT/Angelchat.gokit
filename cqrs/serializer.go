@@ -53,7 +53,7 @@ func (r *serializer) Unmarshal(v Record) (Event, error) {
 		return nil, fmt.Errorf("event %s is not registerd", v.Type)
 	}
 
-	event := reflect.New(t).Interface()
+	event := reflect.New(t).Interface().(Event)
 	if err := json.Unmarshal(v.Event, event); err != nil {
 		return nil, err
 	}

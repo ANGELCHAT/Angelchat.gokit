@@ -22,14 +22,14 @@ func (s *Service) Save(id string, events ...Event) error {
 		return err
 	}
 
-	if s.opts.Handlers != nil {
-		go func(es []Event) {
-			for _, e := range es {
-				for _, h := range s.opts.Handlers {
-					h(e)
-				}
-			}
-		}(events)
+	if s.opts.Handlers == nil {
+		return nil
+	}
+
+	for _, e := range events {
+		for _, h := range s.opts.Handlers {
+			h(e)
+		}
 	}
 
 	return nil

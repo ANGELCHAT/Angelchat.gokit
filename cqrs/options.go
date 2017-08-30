@@ -1,7 +1,5 @@
 package cqrs
 
-type Event interface{}
-
 type HandlerFunc func(Event) error
 
 type Options struct {
