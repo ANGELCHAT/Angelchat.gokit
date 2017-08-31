@@ -1,57 +1,70 @@
 package cqrs
 
-import "fmt"
+import (
+	"fmt"
+	"time"
+)
 
 type Service struct {
 	serializer *serializer
 	opts       *Options
 }
 
-func (s *Service) Save(id string, events ...Event) error {
-	var records []Record
-	for _, e := range events {
-		o, err := s.serializer.Marshal(e)
+func (s *Service) Save(a *Aggregate) error {
+	var records []Event
+	events := map[*Event]interface{}{}
+
+	for _, o := range a.events {
+		structure := newStructure(o)
+		data, err := s.serializer.Marshal(structure.Name, o)
 		if err != nil {
 			return err
 		}
 
-		records = append(records, o)
+		e := Event{
+			ID:      generateIdentity(),
+			Type:    structure.Name,
+			Data:    data,
+			Created: time.Now(),
+			Version: 0,
+		}
+
+		events[&e] = o
+		records = append(records, e)
 	}
 
-	if err := s.opts.Storage.Save(id, records); err != nil {
+	if err := s.opts.Storage.Save(a.Identity(), records); err != nil {
 		return err
 	}
 
-	if s.opts.Handlers == nil {
-		return nil
-	}
-
-	for _, e := range events {
-		for _, h := range s.opts.Handlers {
-			h(e)
+	if s.opts.Handlers != nil {
+		for r, o := range events {
+			for _, h := range s.opts.Handlers {
+				h(a.ID, *r, o)
+			}
 		}
 	}
 
 	return nil
 }
 
-func (s *Service) Load(id string, h HandlerFunc) error {
-	rs, err := s.opts.Storage.Load(id)
+func (s *Service) Load(a *Aggregate) error {
+	rs, err := s.opts.Storage.Load(a.Identity())
 	if err != nil {
 		return err
 	}
 
 	if len(rs) == 0 {
-		return fmt.Errorf("#%s %s not found", id, s.opts.Name)
+		return fmt.Errorf("#%s %s not found", a.Identity(), a.Name)
 	}
 
-	for _, record := range rs {
-		event, err := s.serializer.Unmarshal(record)
+	for _, event := range rs {
+		e, err := s.serializer.Unmarshal(event.Type, event.Data)
 		if err != nil {
 			return err
 		}
 
-		if err := h(event); err != nil {
+		if err := a.handle(e); err != nil {
 			return err
 		}
 	}
@@ -59,7 +72,8 @@ func (s *Service) Load(id string, h HandlerFunc) error {
 	return nil
 }
 
-func New(es []Event, os ...Option) *Service {
+//todo - required "aggregate name", "list of events"
+func New(es []interface{}, os ...Option) *Service {
 	return &Service{
 		serializer: newSerializer(es...),
 		opts:       newOptions(os...),

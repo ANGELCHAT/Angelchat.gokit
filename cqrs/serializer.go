@@ -2,86 +2,49 @@ package cqrs
 
 import (
 	"encoding/json"
-	"reflect"
-	"time"
 
 	"fmt"
-
-	"github.com/google/uuid"
 )
 
 type serializer struct {
-	object map[string]reflect.Type
+	object map[string]structure
 }
 
-type Record struct {
-	ID        string
-	Type      string
-	CreatedAt time.Time
-	Event     []byte
-	Version   uint8
-}
-
-func (e Record) String() string {
-	return fmt.Sprintf(
-		"#%s...: %s at %s\n",
-		e.ID[0:8], e.Type, e.CreatedAt.Format("2006-01-02 15:04"))
-}
-
-func (r *serializer) Marshal(e Event) (Record, error) {
-	name, _ := eventInfo(e)
-	if _, ok := r.object[name]; !ok {
-		return Record{}, fmt.Errorf("event '%s' is not registerd", name)
+func (s *serializer) Marshal(n string, v interface{}) ([]byte, error) {
+	if _, ok := s.object[n]; !ok {
+		return []byte{}, fmt.Errorf("object '%s' is not registerd", n)
 	}
 
-	data, err := json.Marshal(e)
+	data, err := json.Marshal(v)
 	if err != nil {
-		return Record{}, err
+		return []byte{}, err
 	}
 
-	return Record{
-		ID:        uuid.New().String(),
-		Type:      name,
-		CreatedAt: time.Now(),
-		Event:     data,
-	}, nil
+	return data, nil
 }
 
-func (r *serializer) Unmarshal(v Record) (Event, error) {
-	t, ok := r.object[v.Type]
+func (s *serializer) Unmarshal(n string, data []byte) (interface{}, error) {
+	t, ok := s.object[n]
 	if !ok {
-		return nil, fmt.Errorf("event %s is not registerd", v.Type)
+		return nil, fmt.Errorf("object %s is not registerd", n)
 	}
 
-	event := reflect.New(t).Interface().(Event)
-	if err := json.Unmarshal(v.Event, event); err != nil {
+	v := t.Instance()
+	if err := json.Unmarshal(data, v); err != nil {
 		return nil, err
 	}
 
-	return event, nil
+	return v, nil
 }
 
-func eventInfo(e Event) (name string, kind reflect.Type) {
-
-	t := reflect.TypeOf(e)
-	if t.Kind() == reflect.Ptr {
-		t = t.Elem()
-	}
-
-	name = t.Name()
-	kind = t
-
-	return
-}
-
-func newSerializer(es ...Event) *serializer {
-	o := map[string]reflect.Type{}
-	for _, e := range es {
-		n, t := eventInfo(e)
-		o[n] = t
+func newSerializer(es ...interface{}) *serializer {
+	os := map[string]structure{}
+	for _, v := range es {
+		s := newStructure(v)
+		os[s.Name] = s
 	}
 
 	return &serializer{
-		object: o,
+		object: os,
 	}
 }

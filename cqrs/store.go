@@ -1,24 +1,39 @@
 package cqrs
 
+import "github.com/sokool/gokit/log"
+
 type Store interface {
-	Save(string, []Record) error
-	Load(string) ([]Record, error)
-}
-type memStorage struct {
-	events map[string][]Record
+	Save(Identity, []Event) error
+	Load(Identity) ([]Event, error)
 }
 
-func (s *memStorage) Save(id string, es []Record) error {
-	s.events[id] = append(s.events[id], es...)
+type memStorage struct {
+	events map[Identity][]Event
+}
+
+//todo aggregate name,
+func (s *memStorage) Save(aggregate Identity, rs []Event) error {
+	log.Debug("\ncqrs.store.save", string(aggregate))
+	for _, e := range rs {
+		log.Debug("cqrs.store.save.event", e.String())
+	}
+
+	s.events[aggregate] = append(s.events[aggregate], rs...)
+
 	return nil
 }
 
-func (s *memStorage) Load(id string) ([]Record, error) {
-	return s.events[id], nil
+func (s *memStorage) Load(aggregate Identity) ([]Event, error) {
+	log.Debug("\ncqrs.store.load", string(aggregate))
+	for _, e := range s.events[aggregate] {
+		log.Debug("cqrs.store.load.event", e.String())
+	}
+
+	return s.events[aggregate], nil
 }
 
 func newMemStorage() Store {
 	return &memStorage{
-		events: map[string][]Record{},
+		events: map[Identity][]Event{},
 	}
 }
