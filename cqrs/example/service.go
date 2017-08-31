@@ -13,14 +13,14 @@ var service = cqrs.New(
 	cqrs.EventHandler(Query.Listen),
 )
 
-func New() *aggregate {
-	a := &aggregate{}
+func Tavern() *tavern {
+	a := &tavern{}
 	a.root = cqrs.NewAggregate("tavern", handler(a))
 	return a
 }
 
-func Load(id string) (*aggregate, error) {
-	a := New()
+func Load(id string) (*tavern, error) {
+	a := Tavern()
 	a.root.ID = cqrs.Identity(id)
 
 	if err := service.Load(a.root); err != nil {
@@ -30,7 +30,7 @@ func Load(id string) (*aggregate, error) {
 	return a, nil
 }
 
-func Save(a *aggregate) (string, error) {
+func Save(a *tavern) (string, error) {
 	if err := service.Save(a.root); err != nil {
 		return "", err
 	}

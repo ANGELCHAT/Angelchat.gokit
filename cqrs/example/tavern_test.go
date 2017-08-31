@@ -12,14 +12,15 @@ import (
 )
 
 func TestAggregate(t *testing.T) {
-	r1 := example.New()
+	r1 := example.Tavern()
+
 	is.Ok(t, r1.Create("PasiBus", "burgers restaurant", "onion", "chilly"))
 	is.Ok(t, r1.Schedule(time.Now().AddDate(0, 0, 3)))
 	is.Ok(t, r1.Subscribe("Mike", "Onion Burger!"))
 	id1, err := example.Save(r1)
 	is.Ok(t, err)
 
-	r2 := example.New()
+	r2 := example.Tavern()
 	is.Ok(t, r2.Create("Zdrowe Gary", "polskie papu", "pomidorowa", "ogórkowa", "kalafiorowa"))
 	is.Ok(t, r2.Subscribe("Mike", "pomidorowa"))
 	is.Ok(t, r2.Subscribe("Greg", "ogórkowa"))
@@ -43,11 +44,11 @@ func TestAggregate(t *testing.T) {
 
 	fmt.Printf("\nQuery\n")
 	for _, ta := range example.Query.Taverns() {
-		fmt.Printf("%T:%+v\n",ta, ta)
+		fmt.Printf("%T:%+v\n", ta, ta)
 	}
 
 	for _, ta := range example.Query.People() {
-		fmt.Printf("%T:%+v\n",ta, ta)
+		fmt.Printf("%T:%+v\n", ta, ta)
 	}
 
 }

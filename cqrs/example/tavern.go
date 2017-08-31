@@ -16,8 +16,8 @@ type subscription struct {
 	on     time.Time
 }
 
-type aggregate struct {
-	//cqrs aggregate
+type tavern struct {
+	//cqrs tavern
 	root *cqrs.Aggregate
 
 	//Business data
@@ -32,7 +32,7 @@ type aggregate struct {
 //
 // Business Methods
 //
-func (a *aggregate) Subscribe(person, meal string) error {
+func (a *tavern) Subscribe(person, meal string) error {
 	if !a.canceled.IsZero() {
 		return fmt.Errorf("%s subscriptions has been canceled", a.name)
 	}
@@ -58,7 +58,7 @@ func (a *aggregate) Subscribe(person, meal string) error {
 	return nil
 }
 
-func (a *aggregate) Reschedule(date time.Time) error {
+func (a *tavern) Reschedule(date time.Time) error {
 	if !a.canceled.IsZero() {
 		return fmt.Errorf("%s is canceled", a.name)
 	}
@@ -68,7 +68,7 @@ func (a *aggregate) Reschedule(date time.Time) error {
 	return nil
 }
 
-func (a *aggregate) Schedule(date time.Time) error {
+func (a *tavern) Schedule(date time.Time) error {
 	if !date.After(time.Now()) {
 		return fmt.Errorf("tavern %s can not be scheduled in past", a.name)
 	}
@@ -88,7 +88,7 @@ func (a *aggregate) Schedule(date time.Time) error {
 	return nil
 }
 
-func (a *aggregate) Cancel() error {
+func (a *tavern) Cancel() error {
 	var people []string
 
 	if !a.canceled.IsZero() {
@@ -107,7 +107,7 @@ func (a *aggregate) Cancel() error {
 	return nil
 }
 
-func (a *aggregate) Create(name, info string, menu ...string) error {
+func (a *tavern) Create(name, info string, menu ...string) error {
 	a.root.Apply(&events.Created{
 		Restaurant: name,
 		Info:       info,
@@ -117,7 +117,7 @@ func (a *aggregate) Create(name, info string, menu ...string) error {
 	return nil
 }
 
-func handler(a *aggregate) func(interface{}) error {
+func handler(a *tavern) func(interface{}) error {
 	return func(e interface{}) error {
 		switch e := e.(type) {
 		case *events.Created:
