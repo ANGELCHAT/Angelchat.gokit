@@ -16,8 +16,8 @@ type subscription struct {
 	on     time.Time
 }
 
-type tavern struct {
-	//cqrs tavern
+type restaurant struct {
+	//cqrs restaurant
 	root *cqrs.Aggregate
 
 	//Business data
@@ -32,7 +32,7 @@ type tavern struct {
 //
 // Business Methods
 //
-func (a *tavern) Subscribe(person, meal string) error {
+func (a *restaurant) Subscribe(person, meal string) error {
 	if !a.canceled.IsZero() {
 		return fmt.Errorf("%s subscriptions has been canceled", a.name)
 	}
@@ -58,7 +58,7 @@ func (a *tavern) Subscribe(person, meal string) error {
 	return nil
 }
 
-func (a *tavern) Reschedule(date time.Time) error {
+func (a *restaurant) Reschedule(date time.Time) error {
 	if !a.canceled.IsZero() {
 		return fmt.Errorf("%s is canceled", a.name)
 	}
@@ -68,18 +68,18 @@ func (a *tavern) Reschedule(date time.Time) error {
 	return nil
 }
 
-func (a *tavern) Schedule(date time.Time) error {
+func (a *restaurant) Schedule(date time.Time) error {
 	if !date.After(time.Now()) {
-		return fmt.Errorf("tavern %s can not be scheduled in past", a.name)
+		return fmt.Errorf("restaurant %s can not be scheduled in past", a.name)
 	}
 
 	if !a.canceled.IsZero() {
-		return fmt.Errorf("tavern %s has been canceled", a.name)
+		return fmt.Errorf("restaurant %s has been canceled", a.name)
 	}
 
 	if !a.scheduled.IsZero() {
 		return fmt.Errorf(
-			"tavern %s is already scheduled for %s",
+			"restaurant %s is already scheduled for %s",
 			a.name, a.scheduled.Format("2006-01-02"))
 	}
 
@@ -88,7 +88,7 @@ func (a *tavern) Schedule(date time.Time) error {
 	return nil
 }
 
-func (a *tavern) Cancel() error {
+func (a *restaurant) Cancel() error {
 	var people []string
 
 	if !a.canceled.IsZero() {
@@ -107,7 +107,7 @@ func (a *tavern) Cancel() error {
 	return nil
 }
 
-func (a *tavern) Create(name, info string, menu ...string) error {
+func (a *restaurant) Create(name, info string, menu ...string) error {
 	a.root.Apply(&events.Created{
 		Restaurant: name,
 		Info:       info,
@@ -117,7 +117,7 @@ func (a *tavern) Create(name, info string, menu ...string) error {
 	return nil
 }
 
-func handler(a *tavern) func(interface{}) error {
+func handler(a *restaurant) func(interface{}) error {
 	return func(e interface{}) error {
 		switch e := e.(type) {
 		case *events.Created:

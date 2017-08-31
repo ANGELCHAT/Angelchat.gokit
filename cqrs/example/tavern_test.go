@@ -12,7 +12,7 @@ import (
 )
 
 func TestAggregate(t *testing.T) {
-	r1 := example.Tavern()
+	r1 := example.Restaurant()
 
 	is.Ok(t, r1.Create("PasiBus", "burgers restaurant", "onion", "chilly"))
 	is.Ok(t, r1.Schedule(time.Now().AddDate(0, 0, 3)))
@@ -20,7 +20,7 @@ func TestAggregate(t *testing.T) {
 	id1, err := example.Save(r1)
 	is.Ok(t, err)
 
-	r2 := example.Tavern()
+	r2 := example.Restaurant()
 	is.Ok(t, r2.Create("Zdrowe Gary", "polskie papu", "pomidorowa", "ogórkowa", "kalafiorowa"))
 	is.Ok(t, r2.Subscribe("Mike", "pomidorowa"))
 	is.Ok(t, r2.Subscribe("Greg", "ogórkowa"))
