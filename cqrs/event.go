@@ -46,7 +46,7 @@ type Event struct {
 }
 
 func (r Event) String() string {
-	return fmt.Sprintf("%s #%d.%s%s",
+	return fmt.Sprintf("#%s: v%d.%s%s",
 		r.ID[24:], r.Version, r.Type, r.Data)
 }
 
@@ -90,7 +90,12 @@ func NewAggregate(name string, f func(interface{}) error) *Root {
 //todo maybe interface?
 type Aggregate struct {
 	ID      string
-	Name    string
+	Type    string
 	Version uint64
 	Events  []Event
+}
+
+func (a *Aggregate) String() string {
+	return fmt.Sprintf("#%s: v%d.%s with %d new events",
+		a.ID[24:], a.Version, a.Type, len(a.Events))
 }

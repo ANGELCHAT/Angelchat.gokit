@@ -11,7 +11,7 @@ func (s *Service) Save(a *Root) error {
 	events := map[*Event]interface{}{}
 	g := Aggregate{
 		ID:      a.Identity().String(),
-		Name:    a.Name,
+		Type:    a.Name,
 		Version: a.version,
 	}
 
@@ -63,7 +63,7 @@ func (s *Service) Load(a *Root) error {
 	}
 
 	a.ID = Identity(agg.ID)
-	a.Name = agg.Name
+	a.Name = agg.Type
 	a.version = agg.Version
 
 	for _, event := range agg.Events {

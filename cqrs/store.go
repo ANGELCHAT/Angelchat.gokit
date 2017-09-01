@@ -17,8 +17,7 @@ type memStorage struct {
 
 //todo store aggregate{id, name, version, []event}!
 func (s *memStorage) Save(a Aggregate) error {
-	log.Info("cqrs.mem-store.save", "%s.%dv: #%s + %d new events",
-		a.Name, a.Version, a.ID[24:], len(a.Events))
+	log.Info("cqrs.mem-store.save", "%s", a.String())
 
 	// no aggregate = add it!
 	if _, ok := s.store[a.ID]; !ok {
@@ -59,7 +58,7 @@ func (s *memStorage) Load(id string) (Aggregate, error) {
 	}
 
 	log.Info("cqrs.mem-store.load", "%s.%dv: #%s",
-		a.Name, a.Version, a.ID[24:])
+		a.Type, a.Version, a.ID[24:])
 
 	for _, e := range a.Events {
 		log.Debug("cqrs.mem-store.load", "event %s", e.String())

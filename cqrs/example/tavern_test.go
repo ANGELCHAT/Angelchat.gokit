@@ -20,6 +20,7 @@ func TestAggregate(t *testing.T) {
 	is.Ok(t, r1.Create("PasiBus", "burgers restaurant", "onion", "chilly"))
 	is.Ok(t, r1.Schedule(time.Now().AddDate(0, 0, 3)))
 	is.Ok(t, r1.Subscribe("Mike", "Onion Burger!"))
+	is.Ok(t, r1.Subscribe("Zygmunt", "kalafiorowa"))
 	id1, err := example.Save(r1)
 	is.Ok(t, err)
 
@@ -45,12 +46,10 @@ func TestAggregate(t *testing.T) {
 	zdrowe, err := example.Load(id2)
 	is.Ok(t, err)
 
-
-	zdrowe.Reschedule(time.Now().AddDate(0,0,5,))
+	zdrowe.Reschedule(time.Now().AddDate(0, 0, 5))
 	zdrowe.Subscribe("Charlie", "gilowana pierś")
-	idx, err := example.Save(zdrowe)
+	_, err = example.Save(zdrowe)
 	is.Ok(t, err)
-	fmt.Printf(idx)
 
 	log.Info("", "")
 	for _, ta := range example.Query.Taverns() {
