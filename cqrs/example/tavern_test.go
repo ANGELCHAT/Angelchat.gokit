@@ -5,9 +5,9 @@ import (
 
 	"time"
 
-	"fmt"
-
 	"os"
+
+	"fmt"
 
 	"github.com/sokool/gokit/cqrs/example"
 	"github.com/sokool/gokit/log"
@@ -62,14 +62,47 @@ func TestAggregate(t *testing.T) {
 
 }
 
-func BenchmarkLocking(b *testing.B) {
-	log.Default = log.New(log.Levels(os.Stdout, nil, os.Stderr))
-	r := example.Restaurant()
-	r.Create("PasiBus", "nice burgers", "onion", "chilly")
-	id, err := example.Save(r)
+func BenchmarkEventsStorage1(b *testing.B)     { benchmarkEventsStorage(1, b) }
+func BenchmarkEventsStorage100(b *testing.B)   { benchmarkEventsStorage(100, b) }
+func BenchmarkEventsStorage1000(b *testing.B)  { benchmarkEventsStorage(1000, b) }
+func BenchmarkEventsStorage10000(b *testing.B) { benchmarkEventsStorage(10000, b) }
+func BenchmarkEventsStorage50000(b *testing.B) { benchmarkEventsStorage(50000, b) }
 
+func BenchmarkEventsLoading1(b *testing.B)     { benchmarkEventsLoading(1, b) }
+func BenchmarkEventsLoading100(b *testing.B)   { benchmarkEventsLoading(100, b) }
+func BenchmarkEventsLoading1000(b *testing.B)  { benchmarkEventsLoading(1000, b) }
+func BenchmarkEventsLoading10000(b *testing.B) { benchmarkEventsLoading(10000, b) }
+func BenchmarkEventsLoading50000(b *testing.B) { benchmarkEventsLoading(50000, b) }
+
+func benchmarkEventsStorage(x int, b *testing.B) {
+	log.Default = log.New(log.Levels(nil, nil, os.Stderr))
+	for n := 0; n < b.N; n++ {
+		r := example.Restaurant()
+		is.Ok(b, r.Create("Restaurant", "Info", "Meal A", "Meal B"))
+		is.Ok(b, r.Schedule(time.Now().AddDate(0, 0, 1)))
+		for i := 0; i < x; i++ {
+			is.Ok(b, r.Subscribe(fmt.Sprintf("Person #%d", i), "Meal"))
+		}
+
+		_, err := example.Save(r)
+		is.Ok(b, err)
+	}
+}
+
+func benchmarkEventsLoading(x int, b *testing.B) {
+	log.Default = log.New(log.Levels(nil, nil, os.Stderr))
+	r := example.Restaurant()
+	is.Ok(b, r.Create("Restaurant", "Info", "Meal A", "Meal B"))
+	is.Ok(b, r.Schedule(time.Now().AddDate(0, 0, 1)))
+	for i := 0; i < x; i++ {
+		is.Ok(b, r.Subscribe(fmt.Sprintf("Person #%d", i), "Meal"))
+	}
+
+	id, err := example.Save(r)
 	is.Ok(b, err)
 
-	fmt.Println(id)
-
+	for n := 0; n < b.N; n++ {
+		_, err := example.Load(id)
+		is.Ok(b, err)
+	}
 }
