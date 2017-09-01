@@ -1,12 +1,5 @@
 package cqrs
 
-import (
-	"os"
-
-	"github.com/sokool/gokit/log"
-	"github.com/sokool/gokit/mongo"
-)
-
 // for external use ie. another aggregate
 type HandlerFunc func(Identity, Event, interface{}) error
 
@@ -34,23 +27,23 @@ func EventHandler(fn HandlerFunc) Option {
 	}
 }
 
-func MongoStorage(url, session, collection string) Option {
-	return func(o *Options) {
-		// initialize databases
-		if err := mongo.RegisterSession(session, url); err != nil {
-			log.Error("cqrs.mongo", err)
-			os.Exit(-1)
-		}
-
-		db, err := mongo.Session(session)
-		if err != nil {
-			log.Error("cqrs.mongo", err)
-			os.Exit(-1)
-		}
-
-		o.Storage = mongoStore(db, collection)
-	}
-}
+//func MongoStorage(url, session, collection string) Option {
+//	return func(o *Options) {
+//		// initialize databases
+//		if err := mongo.RegisterSession(session, url); err != nil {
+//			log.Error("cqrs.mongo", err)
+//			os.Exit(-1)
+//		}
+//
+//		db, err := mongo.Session(session)
+//		if err != nil {
+//			log.Error("cqrs.mongo", err)
+//			os.Exit(-1)
+//		}
+//
+//		o.Storage = mongoStore(db, collection)
+//	}
+//}
 
 func newOptions(ops ...Option) *Options {
 	s := &Options{}

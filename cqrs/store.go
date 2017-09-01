@@ -1,39 +1,75 @@
 package cqrs
 
-import "github.com/sokool/gokit/log"
+import (
+	"fmt"
+
+	"github.com/sokool/gokit/log"
+)
 
 type Store interface {
-	Save(Identity, []Event) error
-	Load(Identity) ([]Event, error)
+	Save(Aggregate) error
+	Load(string) (Aggregate, error)
 }
 
 type memStorage struct {
-	events map[Identity][]Event
+	store map[string]*Aggregate
 }
 
-//todo aggregate name,
-func (s *memStorage) Save(aggregate Identity, rs []Event) error {
-	log.Debug("\ncqrs.store.save", string(aggregate))
-	for _, e := range rs {
-		log.Debug("cqrs.store.save.event", e.String())
+//todo store aggregate{id, name, version, []event}!
+func (s *memStorage) Save(a Aggregate) error {
+	log.Info("cqrs.mem-store.save", "%s.%dv: #%s + %d new events",
+		a.Name, a.Version, a.ID[24:], len(a.Events))
+
+	// no aggregate = add it!
+	if _, ok := s.store[a.ID]; !ok {
+		s.store[a.ID] = &a
+		s.store[a.ID].Version = uint64(len(a.Events))
+		for _, e := range a.Events {
+			log.Debug("cqrs.mem-store.save.event", e.String())
+		}
+
+		return nil
 	}
 
-	s.events[aggregate] = append(s.events[aggregate], rs...)
+	// nothing has changed!
+	if len(a.Events) == 0 {
+		return nil
+	}
+
+	current := s.store[a.ID]
+	if current.Version != a.Version {
+		return fmt.Errorf("#%s mismatch versions, got: %d, expected: %d",
+			a.ID[24:], a.Version, current.Version)
+	}
+
+	for _, e := range a.Events {
+		current.Events = append(current.Events, e)
+		log.Debug("cqrs.mem-store.save.event", e.String())
+		current.Version++
+	}
 
 	return nil
 }
 
-func (s *memStorage) Load(aggregate Identity) ([]Event, error) {
-	log.Debug("\ncqrs.store.load", string(aggregate))
-	for _, e := range s.events[aggregate] {
-		log.Debug("cqrs.store.load.event", e.String())
+// todo load aggregate{id, name, version, []event}
+func (s *memStorage) Load(id string) (Aggregate, error) {
+	a, ok := s.store[id]
+	if !ok {
+		return *a, fmt.Errorf("#%s not found", id)
 	}
 
-	return s.events[aggregate], nil
+	log.Info("cqrs.mem-store.load", "%s.%dv: #%s",
+		a.Name, a.Version, a.ID[24:])
+
+	for _, e := range a.Events {
+		log.Debug("cqrs.mem-store.load", "event %s", e.String())
+	}
+
+	return *a, nil
 }
 
 func newMemStorage() Store {
 	return &memStorage{
-		events: map[Identity][]Event{},
+		store: map[string]*Aggregate{},
 	}
 }

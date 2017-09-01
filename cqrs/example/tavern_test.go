@@ -7,7 +7,10 @@ import (
 
 	"fmt"
 
+	"os"
+
 	"github.com/sokool/gokit/cqrs/example"
+	"github.com/sokool/gokit/log"
 	"github.com/sokool/gokit/test/is"
 )
 
@@ -39,16 +42,35 @@ func TestAggregate(t *testing.T) {
 	_, err = example.Load(id1)
 	is.Ok(t, err)
 
-	_, err = example.Load(id2)
+	zdrowe, err := example.Load(id2)
 	is.Ok(t, err)
 
-	fmt.Printf("\nQuery\n")
+
+	zdrowe.Reschedule(time.Now().AddDate(0,0,5,))
+	zdrowe.Subscribe("Charlie", "gilowana pierś")
+	idx, err := example.Save(zdrowe)
+	is.Ok(t, err)
+	fmt.Printf(idx)
+
+	log.Info("", "")
 	for _, ta := range example.Query.Taverns() {
-		fmt.Printf("%T:%+v\n", ta, ta)
+		log.Info("example.query.tavern", "%+v", ta)
 	}
 
 	for _, ta := range example.Query.People() {
-		fmt.Printf("%T:%+v\n", ta, ta)
+		log.Info("example.query.person", "%+v", ta)
 	}
+
+}
+
+func BenchmarkLocking(b *testing.B) {
+	log.Default = log.New(log.Levels(os.Stdout, nil, os.Stderr))
+	r := example.Restaurant()
+	r.Create("PasiBus", "nice burgers", "onion", "chilly")
+	id, err := example.Save(r)
+
+	is.Ok(b, err)
+
+	fmt.Println(id)
 
 }

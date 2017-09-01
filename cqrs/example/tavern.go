@@ -18,7 +18,7 @@ type subscription struct {
 
 type restaurant struct {
 	//cqrs restaurant
-	root *cqrs.Aggregate
+	root *cqrs.Root
 
 	//Business data
 	name          string
@@ -143,6 +143,9 @@ func handler(a *restaurant) func(interface{}) error {
 
 		case *events.Canceled:
 			a.canceled = e.At
+
+		case *events.Rescheduled:
+			a.scheduled = e.On
 
 		default:
 			return fmt.Errorf("event %s not handled", reflect.TypeOf(e))

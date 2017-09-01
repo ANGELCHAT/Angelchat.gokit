@@ -50,21 +50,22 @@ func (r Event) String() string {
 		r.ID[24:], r.Version, r.Type, r.Data)
 }
 
-type Aggregate struct {
+type Root struct {
 	ID      Identity
 	Name    string
+	version uint64
 	events  []interface{}
 	handler func(interface{}) error
 }
 
-func (a *Aggregate) Identity() Identity {
+func (a *Root) Identity() Identity {
 	if len(a.ID) == 0 {
 		a.ID = generateIdentity()
 	}
 	return a.ID
 }
 
-func (a *Aggregate) Apply(e interface{}) error {
+func (a *Root) Apply(e interface{}) error {
 	if err := a.handle(e); err != nil {
 		log.Error("tavern.event.handling", err)
 		return err
@@ -74,14 +75,22 @@ func (a *Aggregate) Apply(e interface{}) error {
 	return nil
 }
 
-func (a *Aggregate) handle(v interface{}) error {
+func (a *Root) handle(v interface{}) error {
 	return a.handler(v)
 }
 
-func NewAggregate(name string, f func(interface{}) error) *Aggregate {
-	return &Aggregate{
+func NewAggregate(name string, f func(interface{}) error) *Root {
+	return &Root{
 		Name:    name,
 		events:  []interface{}{},
 		handler: f,
 	}
+}
+
+//todo maybe interface?
+type Aggregate struct {
+	ID      string
+	Name    string
+	Version uint64
+	Events  []Event
 }
