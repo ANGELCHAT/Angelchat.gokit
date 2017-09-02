@@ -21,6 +21,7 @@ type (
 		Restaurant string
 		Info       string
 		Menu       []string
+		At         time.Time
 	}
 
 	MealSelected struct {

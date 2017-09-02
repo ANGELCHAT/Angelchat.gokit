@@ -62,6 +62,10 @@ func TestAggregate(t *testing.T) {
 
 }
 
+func TestA(t *testing.T) {
+
+}
+
 func BenchmarkEventsStorage1(b *testing.B)     { benchmarkEventsStorage(1, b) }
 func BenchmarkEventsStorage100(b *testing.B)   { benchmarkEventsStorage(100, b) }
 func BenchmarkEventsStorage1000(b *testing.B)  { benchmarkEventsStorage(1000, b) }
@@ -102,7 +106,11 @@ func benchmarkEventsLoading(x int, b *testing.B) {
 	is.Ok(b, err)
 
 	for n := 0; n < b.N; n++ {
-		_, err := example.Load(id)
+		//example.Load(id)
+		a, err := example.Load(id)
 		is.Ok(b, err)
+		is.Ok(b, a.Subscribe("Tom", "Papu"))
+		//_, err = example.Save(a) // it's something wrong with this!
+		//is.Ok(b, err)
 	}
 }

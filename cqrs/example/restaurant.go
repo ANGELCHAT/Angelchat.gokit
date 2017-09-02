@@ -18,15 +18,17 @@ type subscription struct {
 
 type restaurant struct {
 	//cqrs restaurant
-	root *cqrs.Root
+	Root *cqrs.Root
 
 	//Business data
 	name          string
 	info          string
 	menu          []string
 	subscriptions map[string]subscription
-	scheduled     time.Time
-	canceled      time.Time
+
+	created   time.Time
+	scheduled time.Time
+	canceled  time.Time
 }
 
 //
@@ -41,7 +43,7 @@ func (a *restaurant) Subscribe(person, meal string) error {
 	s, ok := a.subscriptions[person]
 
 	if ok {
-		a.root.Apply(&events.MealChanged{
+		a.Root.Apply(&events.MealChanged{
 			Person:      person,
 			PreviewMeal: s.meal,
 			ActualMeal:  meal,
@@ -50,7 +52,7 @@ func (a *restaurant) Subscribe(person, meal string) error {
 		return nil
 	}
 
-	a.root.Apply(&events.MealSelected{
+	a.Root.Apply(&events.MealSelected{
 		Person: person,
 		Meal:   meal,
 		At:     d})
@@ -63,7 +65,7 @@ func (a *restaurant) Reschedule(date time.Time) error {
 		return fmt.Errorf("%s is canceled", a.name)
 	}
 
-	a.root.Apply(&events.Rescheduled{On: date})
+	a.Root.Apply(&events.Rescheduled{On: date})
 
 	return nil
 }
@@ -83,7 +85,7 @@ func (a *restaurant) Schedule(date time.Time) error {
 			a.name, a.scheduled.Format("2006-01-02"))
 	}
 
-	a.root.Apply(&events.Scheduled{On: date})
+	a.Root.Apply(&events.Scheduled{On: date})
 
 	return nil
 }
@@ -99,7 +101,7 @@ func (a *restaurant) Cancel() error {
 		people = append(people, p.person)
 	}
 
-	a.root.Apply(&events.Canceled{
+	a.Root.Apply(&events.Canceled{
 		Restaurant: a.name,
 		People:     people,
 		At:         time.Now()})
@@ -108,21 +110,27 @@ func (a *restaurant) Cancel() error {
 }
 
 func (a *restaurant) Create(name, info string, menu ...string) error {
-	a.root.Apply(&events.Created{
+	if !a.created.IsZero() {
+		return fmt.Errorf("restaurant %s is already created", a.name)
+	}
+
+	a.Root.Apply(&events.Created{
 		Restaurant: name,
 		Info:       info,
 		Menu:       menu,
+		At:         time.Now(),
 	})
 
 	return nil
 }
 
-func handler(a *restaurant) func(interface{}) error {
+func Handler(a *restaurant) func(interface{}) error {
 	return func(e interface{}) error {
 		switch e := e.(type) {
 		case *events.Created:
 			a.name, a.info, a.menu = e.Restaurant, e.Info, e.Menu
 			a.subscriptions = map[string]subscription{}
+			a.created = e.At
 
 		case *events.Scheduled:
 			a.scheduled = e.On

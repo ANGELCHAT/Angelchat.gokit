@@ -9,6 +9,7 @@ import (
 	"github.com/sokool/gokit/log"
 )
 
+//todo do not need to be exported?
 type Identity string
 
 func (i Identity) String() string {
@@ -45,15 +46,15 @@ type Event struct {
 	Created time.Time
 }
 
-func (r Event) String() string {
+func (e Event) String() string {
 	return fmt.Sprintf("#%s: v%d.%s%s",
-		r.ID[24:], r.Version, r.Type, r.Data)
+		e.ID[24:], e.Version, e.Type, e.Data)
 }
 
 type Root struct {
 	ID      Identity
-	Name    string
-	version uint64
+	Type    string
+	Version uint64
 	events  []interface{}
 	handler func(interface{}) error
 }
@@ -70,7 +71,6 @@ func (a *Root) Apply(e interface{}) error {
 		log.Error("tavern.event.handling", err)
 		return err
 	}
-
 	a.events = append(a.events, e)
 	return nil
 }
@@ -79,11 +79,11 @@ func (a *Root) handle(v interface{}) error {
 	return a.handler(v)
 }
 
-func NewAggregate(name string, f func(interface{}) error) *Root {
+func NewAggregate(name string, handler func(interface{}) error) *Root {
 	return &Root{
-		Name:    name,
+		Type:    name,
 		events:  []interface{}{},
-		handler: f,
+		handler: handler,
 	}
 }
 
@@ -92,10 +92,9 @@ type Aggregate struct {
 	ID      string
 	Type    string
 	Version uint64
-	Events  []Event
 }
 
 func (a *Aggregate) String() string {
-	return fmt.Sprintf("#%s: v%d.%s with %d new events",
-		a.ID[24:], a.Version, a.Type, len(a.Events))
+	return fmt.Sprintf("#%s: v%d.%s",
+		a.ID[24:], a.Version, a.Type)
 }

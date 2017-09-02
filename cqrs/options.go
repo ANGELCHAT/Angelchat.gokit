@@ -7,6 +7,7 @@ type Options struct {
 	Handlers []HandlerFunc
 	Storage  Store
 	Name     string
+	Snapshot int
 }
 
 type Option func(*Options)
@@ -14,6 +15,19 @@ type Option func(*Options)
 func Storage(s Store) Option {
 	return func(o *Options) {
 		o.Storage = s
+	}
+}
+
+//
+func IdentityGenerator() Option {
+	return func(o *Options) {
+
+	}
+}
+
+func Snapshot(epoch int) Option {
+	return func(o *Options) {
+		o.Snapshot = epoch
 	}
 }
 
@@ -53,7 +67,7 @@ func newOptions(ops ...Option) *Options {
 	}
 
 	if s.Storage == nil {
-		s.Storage = newMemStorage()
+		s.Storage = NewMemoryStorage()
 	}
 
 	return s

@@ -15,15 +15,14 @@ var service = cqrs.New(
 
 func Restaurant() *restaurant {
 	a := &restaurant{}
-	a.root = cqrs.NewAggregate("restaurant", handler(a))
+	a.Root = cqrs.NewAggregate("restaurant", Handler(a))
 	return a
 }
 
 func Load(id string) (*restaurant, error) {
+	var err error
 	a := Restaurant()
-	a.root.ID = cqrs.Identity(id)
-
-	if err := service.Load(a.root); err != nil {
+	if a.Root, err = service.Load(id, Handler(a)); err != nil {
 		return nil, err
 	}
 
@@ -31,9 +30,9 @@ func Load(id string) (*restaurant, error) {
 }
 
 func Save(a *restaurant) (string, error) {
-	if err := service.Save(a.root); err != nil {
+	if err := service.Save(a.Root); err != nil {
 		return "", err
 	}
 
-	return a.root.ID.String(), nil
+	return a.Root.ID.String(), nil
 }
