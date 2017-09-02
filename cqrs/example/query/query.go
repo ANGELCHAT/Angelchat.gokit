@@ -1,16 +1,19 @@
 package query
 
 import (
+	"time"
+
 	"github.com/sokool/gokit/cqrs"
 	"github.com/sokool/gokit/cqrs/example/events"
 )
 
 type Tavern struct {
-	ID   int
-	UUID string
-	Name string
-	Info string
-	Menu []string
+	ID        int
+	UUID      string
+	Name      string
+	Info      string
+	Menu      []string
+	CreatedAt time.Time
 }
 
 type Person struct {
@@ -25,34 +28,35 @@ type Query struct {
 	people  map[string]Person
 }
 
-func (q *Query) Listen(aggregate cqrs.Identity, r cqrs.Event, data interface{}) error {
-	switch e := data.(type) {
-	case *events.Created:
-		if _, ok := q.taverns[aggregate.String()]; ok {
-			break
-		}
+func (q *Query) Listen(a cqrs.Aggregate, ce []cqrs.Event, es []interface{}) {
+	for _, event := range es {
+		switch e := event.(type) {
+		case *events.Created:
+			if _, ok := q.taverns[a.String()]; ok {
+				break
+			}
 
-		q.taverns[aggregate.String()] = Tavern{
-			ID:   q.tid,
-			UUID: aggregate.String(),
-			Name: e.Restaurant,
-			Info: e.Info,
-			Menu: e.Menu,
-		}
-		q.tid++
-	case *events.MealSelected:
-		if _, ok := q.people[e.Person]; ok {
-			break
-		}
+			q.taverns[a.String()] = Tavern{
+				ID:        q.tid,
+				UUID:      a.ID,
+				Name:      e.Restaurant,
+				Info:      e.Info,
+				Menu:      e.Menu,
+				CreatedAt: e.At,
+			}
+			q.tid++
+		case *events.MealSelected:
+			if _, ok := q.people[e.Person]; ok {
+				break
+			}
 
-		q.people[e.Person] = Person{
-			ID:   q.pid,
-			Name: e.Person,
+			q.people[e.Person] = Person{
+				ID:   q.pid,
+				Name: e.Person,
+			}
+			q.pid++
 		}
-		q.pid++
 	}
-
-	return nil
 }
 
 func (q *Query) Taverns() map[string]Tavern {

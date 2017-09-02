@@ -38,7 +38,7 @@ type (
 	}
 )
 
-var List = []interface{}{
+var All = []interface{}{
 	&Created{},
 	&Scheduled{},
 	&Rescheduled{},

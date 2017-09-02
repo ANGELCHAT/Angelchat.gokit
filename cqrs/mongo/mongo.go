@@ -1,4 +1,4 @@
-package cqrs
+package mongo
 //
 //import (
 //	"fmt"

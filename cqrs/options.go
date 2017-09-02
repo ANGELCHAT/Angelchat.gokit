@@ -1,7 +1,7 @@
 package cqrs
 
 // for external use ie. another aggregate
-type HandlerFunc func(Identity, Event, interface{}) error
+type HandlerFunc func(Aggregate, []Event, []interface{})
 
 type Options struct {
 	Handlers []HandlerFunc
@@ -18,7 +18,14 @@ func Storage(s Store) Option {
 	}
 }
 
-//
+// todo adds custom logger implementation
+func Logger() Option {
+	return func(o *Options) {
+
+	}
+}
+
+// todo adds custom id generator function.
 func IdentityGenerator() Option {
 	return func(o *Options) {
 

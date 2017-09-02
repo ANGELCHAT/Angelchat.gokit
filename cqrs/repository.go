@@ -13,13 +13,12 @@ type Repository struct {
 	handler    func(interface{}) error
 }
 
-func (s *Repository) Save(a *Root) error {
-	//events := map[*Event]interface{}{}
+func (s *Repository) Save(root *Root) error {
 	var events []Event
-	var id Identity = a.ID
+	var id Identity = root.ID
 
-	version := a.Version
-	for _, o := range a.events {
+	version := root.Version
+	for _, o := range root.events {
 		structure := newStructure(o)
 		data, err := s.serializer.Marshal(structure.Name, o)
 		if err != nil {
@@ -34,8 +33,6 @@ func (s *Repository) Save(a *Root) error {
 			Created: time.Now(),
 			Version: version,
 		})
-
-		//events[&e] = o
 	}
 
 	if len(id) == 0 {
@@ -44,7 +41,7 @@ func (s *Repository) Save(a *Root) error {
 
 	aggregate := Aggregate{
 		ID:      id.String(),
-		Type:    a.Type,
+		Type:    root.Type,
 		Version: version,
 	}
 
@@ -55,18 +52,16 @@ func (s *Repository) Save(a *Root) error {
 
 	log.Debug("cqrs.save.aggregate", "%s", aggregate.String())
 
-	a.ID = id
-	a.events = []interface{}{}
-	a.Version = version
-
 	// send events to listeners of aggregate
-	//if s.opts.Handlers != nil {
-	//	for r, o := range events {
-	//		for _, h := range s.opts.Handlers {
-	//			h(a.ID, *r, o)
-	//		}
-	//	}
-	//}
+	if s.opts.Handlers != nil {
+		for _, eh := range s.opts.Handlers {
+			eh(aggregate, events, root.events)
+		}
+	}
+
+	root.ID = id
+	root.events = []interface{}{}
+	root.Version = version
 
 	return nil
 }
@@ -76,6 +71,7 @@ func (s *Repository) Load(id string, h func(interface{}) error) (*Root, error) {
 	if err != nil {
 		return nil, err
 	}
+	log.Debug("cqrs.load.aggregate", "%s", agg.String())
 
 	root := &Root{
 		ID:      Identity(agg.ID),
@@ -85,7 +81,6 @@ func (s *Repository) Load(id string, h func(interface{}) error) (*Root, error) {
 		handler: h,
 	}
 
-	log.Debug("cqrs.load.aggregate", "%s", agg.String())
 	for _, event := range events {
 		log.Debug("cqrs.load.event", event.String())
 		e, err := s.serializer.Unmarshal(event.Type, event.Data)

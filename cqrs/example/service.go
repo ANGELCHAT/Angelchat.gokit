@@ -9,7 +9,7 @@ import (
 var Query = query.New()
 
 var service = cqrs.New(
-	events.List,
+	events.All,
 	cqrs.EventHandler(Query.Listen),
 )
 

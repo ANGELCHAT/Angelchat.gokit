@@ -105,7 +105,7 @@ func TestMultipleCommands(t *testing.T) {
 
 func TestAggregateVersion(t *testing.T) {
 	mem := cqrs.NewMemoryStorage()
-	repo := cqrs.New(events.List, cqrs.Storage(mem))
+	repo := cqrs.New(events.All, cqrs.Storage(mem))
 
 	r := example.Restaurant()
 	is.True(t, r.Root.Version == 0, "version 0 expected")
@@ -134,12 +134,46 @@ func TestAggregateVersion(t *testing.T) {
 	is.True(t, r.Root.Version == 5, "expected 3, got %d", r2.Root.Version)
 }
 
+func TestEventHandling(t *testing.T) {
+	var result, expected string
+
+	handler := func(a cqrs.Aggregate, es []cqrs.Event, ds []interface{}) {
+		for _, event := range ds {
+			switch e := event.(type) {
+			case *events.Created:
+				result += e.Restaurant
+			case *events.Scheduled:
+				result += e.On.Format("2006-01-02")
+			case *events.MealSelected:
+				result += e.Person + e.Meal
+			}
+		}
+	}
+
+	repo := cqrs.New(events.All, cqrs.EventHandler(handler))
+
+	r := example.Restaurant()
+	r.Create("Tavern", "description", "a", "b", "c")
+	r.Schedule(time.Now().AddDate(0, 0, 1))
+	r.Subscribe("Tom", "Food A")
+	r.Subscribe("Greg", "Food B")
+	r.Subscribe("Janie", "Food C")
+	repo.Save(r.Root)
+
+	expected = "Tavern" +
+		time.Now().AddDate(0, 0, 1).Format("2006-01-02") +
+		"TomFood A" +
+		"GregFood B" +
+		"JanieFood C"
+
+	is.Equal(t, expected, result)
+}
+
 func BenchmarkEventsStorage1(b *testing.B)     { benchmarkEventsStorage(1, b) }
 func BenchmarkEventsStorage100(b *testing.B)   { benchmarkEventsStorage(100, b) }
 func BenchmarkEventsStorage1000(b *testing.B)  { benchmarkEventsStorage(1000, b) }
 func BenchmarkEventsStorage10000(b *testing.B) { benchmarkEventsStorage(10000, b) }
 func BenchmarkEventsStorage50000(b *testing.B) { benchmarkEventsStorage(50000, b) }
-
 
 func BenchmarkEventsLoading1(b *testing.B)     { benchmarkEventsLoading(1, b) }
 func BenchmarkEventsLoading100(b *testing.B)   { benchmarkEventsLoading(100, b) }
@@ -183,4 +217,3 @@ func benchmarkEventsLoading(events int, b *testing.B) {
 		//is.Ok(b, err)
 	}
 }
-

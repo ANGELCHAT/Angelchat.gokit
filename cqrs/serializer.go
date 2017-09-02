@@ -2,8 +2,8 @@ package cqrs
 
 import (
 	"encoding/json"
-
 	"fmt"
+	//"github.com/alecthomas/binary"
 )
 
 type serializer struct {
@@ -15,6 +15,8 @@ func (s *serializer) Marshal(n string, v interface{}) ([]byte, error) {
 		return []byte{}, fmt.Errorf("object '%s' is not registerd", n)
 	}
 
+	//data, err := gocsv.MarshalBytes(v)
+	//data, err := binary.Marshal(v)
 	data, err := json.Marshal(v)
 	if err != nil {
 		return []byte{}, err
@@ -30,6 +32,9 @@ func (s *serializer) Unmarshal(n string, data []byte) (interface{}, error) {
 	}
 
 	v := t.Instance()
+
+	//if err := gocsv.UnmarshalBytes(data, v); err != nil {
+	//if err := binary.Unmarshal(data, v); err != nil {
 	if err := json.Unmarshal(data, v); err != nil {
 		return nil, err
 	}
