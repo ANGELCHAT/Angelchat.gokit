@@ -1,7 +1,15 @@
 package cqrs
 
+// todo: custom logger implementation
+// todo: custom id generator - separate for events and aggregator?
+//		 do I need id for event since I have uint Version?
+// todo: every loaded aggregate is kept in memory(cache), only generated events are stored
+// 		 it is a form of caching, memoization?
+// todo rebuild aggregate based on manually given version and/or date?
+// todo make a snapshot of aggregate, as a separate process
+
 // for external use ie. another aggregate
-type HandlerFunc func(Aggregate, []Event, []interface{})
+type HandlerFunc func(CQRSAggregate, []Event, []interface{})
 
 type Options struct {
 	Handlers []HandlerFunc
@@ -18,25 +26,29 @@ func Storage(s Store) Option {
 	}
 }
 
-// todo adds custom logger implementation
-func Logger() Option {
-	return func(o *Options) {
+//func Logger() Option {
+//	return func(o *Options) {
+//
+//	}
+//}
+//
+//func IdentityGenerator() Option {
+//	return func(o *Options) {
+//
+//	}
+//}
 
-	}
-}
+//func KeepInMemory() Option {
+//	return func(o *Options) {
+//
+//	}
+//}
 
-// todo adds custom id generator function.
-func IdentityGenerator() Option {
-	return func(o *Options) {
-
-	}
-}
-
-func Snapshot(epoch int) Option {
-	return func(o *Options) {
-		o.Snapshot = epoch
-	}
-}
+//func Snapshot(epoch int) Option {
+//	return func(o *Options) {
+//		o.Snapshot = epoch
+//	}
+//}
 
 func EventHandler(fn HandlerFunc) Option {
 	return func(o *Options) {

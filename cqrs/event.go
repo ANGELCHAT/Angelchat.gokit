@@ -9,15 +9,21 @@ import (
 	"github.com/sokool/gokit/log"
 )
 
-//todo do not need to be exported?
-type Identity string
+type Aggregate interface {
+	Root() *Root
+	Set(*Root)
 
-func (i Identity) String() string {
-	return string(i)
+	// todo separate interface Snapshooter? consider as event?
+	TakeSnapshot() interface{}
+	RestoreSnapshot(interface{}) error
 }
 
-func generateIdentity() Identity {
-	return Identity(uuid.New().String())
+type Factory func() (Aggregate, DataHandler)
+
+type DataHandler func(e interface{}) error
+
+func generateID() string {
+	return uuid.New().String()
 }
 
 type structure struct {
@@ -39,7 +45,7 @@ func newStructure(v interface{}) structure {
 }
 
 type Event struct {
-	ID      Identity
+	ID      string
 	Type    string
 	Data    []byte
 	Version uint64
@@ -51,23 +57,23 @@ func (e Event) String() string {
 		e.ID[24:], e.Version, e.Type, e.Data)
 }
 
+//todo Root == CQRSAggregate???
 type Root struct {
-	ID      Identity
-	Type    string
+	ID      string
 	Version uint64
+	Type    string
 	events  []interface{}
 	handler func(interface{}) error
 }
 
-func (a *Root) Identity() Identity {
-	if len(a.ID) == 0 {
-		a.ID = generateIdentity()
-	}
-	return a.ID
+func (a *Root) init(id string, version uint64) {
+	a.ID = id
+	a.Version = version
+	a.events = []interface{}{}
 }
 
 func (a *Root) Apply(e interface{}) error {
-	if err := a.handle(e); err != nil {
+	if err := a.handler(e); err != nil {
 		log.Error("tavern.event.handling", err)
 		return err
 	}
@@ -75,26 +81,31 @@ func (a *Root) Apply(e interface{}) error {
 	return nil
 }
 
-func (a *Root) handle(v interface{}) error {
-	return a.handler(v)
+func (a *Root) String() string {
+	return fmt.Sprintf("#%s: v%d.%s:ROOT", a.ID[24:], a.Version, a.Type)
 }
-
-func NewAggregate(name string, handler func(interface{}) error) *Root {
+func newRoot(h DataHandler, name string) *Root {
 	return &Root{
 		Type:    name,
 		events:  []interface{}{},
-		handler: handler,
+		handler: h,
 	}
 }
 
 //todo maybe interface?
-type Aggregate struct {
+type CQRSAggregate struct {
 	ID      string
 	Type    string
 	Version uint64
 }
 
-func (a *Aggregate) String() string {
-	return fmt.Sprintf("#%s: v%d.%s",
+func (a *CQRSAggregate) String() string {
+	return fmt.Sprintf("#%s: v%d.%s:AGGREGATE",
 		a.ID[24:], a.Version, a.Type)
+}
+
+type Snapshot struct {
+	AggregateID string
+	Data        []byte
+	Version     uint64
 }

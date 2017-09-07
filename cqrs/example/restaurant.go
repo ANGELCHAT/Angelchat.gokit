@@ -16,9 +16,8 @@ type subscription struct {
 	on     time.Time
 }
 
-type restaurant struct {
-	//cqrs restaurant
-	Root *cqrs.Root
+type Restaurant struct {
+	root *cqrs.Root
 
 	//Business data
 	name          string
@@ -31,10 +30,19 @@ type restaurant struct {
 	canceled  time.Time
 }
 
+// CQRS methods :/
+func (a *Restaurant) Root() *cqrs.Root {
+	return a.root
+}
+
+func (a *Restaurant) Set(r *cqrs.Root) {
+	a.root = r
+}
+
 //
 // Business Methods
 //
-func (a *restaurant) Subscribe(person, meal string) error {
+func (a *Restaurant) Subscribe(person, meal string) error {
 	if !a.canceled.IsZero() {
 		return fmt.Errorf("%s subscriptions has been canceled", a.name)
 	}
@@ -43,7 +51,7 @@ func (a *restaurant) Subscribe(person, meal string) error {
 	s, ok := a.subscriptions[person]
 
 	if ok {
-		a.Root.Apply(&events.MealChanged{
+		a.Root().Apply(&events.MealChanged{
 			Person:      person,
 			PreviewMeal: s.meal,
 			ActualMeal:  meal,
@@ -52,7 +60,7 @@ func (a *restaurant) Subscribe(person, meal string) error {
 		return nil
 	}
 
-	a.Root.Apply(&events.MealSelected{
+	a.Root().Apply(&events.MealSelected{
 		Person: person,
 		Meal:   meal,
 		At:     d})
@@ -60,17 +68,17 @@ func (a *restaurant) Subscribe(person, meal string) error {
 	return nil
 }
 
-func (a *restaurant) Reschedule(date time.Time) error {
+func (a *Restaurant) Reschedule(date time.Time) error {
 	if !a.canceled.IsZero() {
 		return fmt.Errorf("%s is canceled", a.name)
 	}
 
-	a.Root.Apply(&events.Rescheduled{On: date})
+	a.Root().Apply(&events.Rescheduled{On: date})
 
 	return nil
 }
 
-func (a *restaurant) Schedule(date time.Time) error {
+func (a *Restaurant) Schedule(date time.Time) error {
 	if !date.After(time.Now()) {
 		return fmt.Errorf("restaurant %s can not be scheduled in past", a.name)
 	}
@@ -85,12 +93,12 @@ func (a *restaurant) Schedule(date time.Time) error {
 			a.name, a.scheduled.Format("2006-01-02"))
 	}
 
-	a.Root.Apply(&events.Scheduled{On: date})
+	a.Root().Apply(&events.Scheduled{On: date})
 
 	return nil
 }
 
-func (a *restaurant) Cancel() error {
+func (a *Restaurant) Cancel() error {
 	var people []string
 
 	if !a.canceled.IsZero() {
@@ -101,7 +109,7 @@ func (a *restaurant) Cancel() error {
 		people = append(people, p.person)
 	}
 
-	a.Root.Apply(&events.Canceled{
+	a.Root().Apply(&events.Canceled{
 		Restaurant: a.name,
 		People:     people,
 		At:         time.Now()})
@@ -109,12 +117,12 @@ func (a *restaurant) Cancel() error {
 	return nil
 }
 
-func (a *restaurant) Create(name, info string, menu ...string) error {
+func (a *Restaurant) Create(name, info string, menu ...string) error {
 	if !a.created.IsZero() {
 		return fmt.Errorf("restaurant %s is already created", a.name)
 	}
 
-	a.Root.Apply(&events.Created{
+	a.Root().Apply(&events.Created{
 		Restaurant: name,
 		Info:       info,
 		Menu:       menu,
@@ -124,7 +132,24 @@ func (a *restaurant) Create(name, info string, menu ...string) error {
 	return nil
 }
 
-func Handler(a *restaurant) func(interface{}) error {
+func (a *Restaurant) TakeSnapshot() interface{} {
+	return Snapshot{
+		Version:       1,
+		Name:          a.name,
+		Info:          a.info,
+		Menu:          a.menu,
+		Subscriptions: a.subscriptions,
+		Created:       a.created,
+		Scheduled:     a.scheduled,
+		Canceled:      a.canceled,
+	}
+}
+
+func (a Restaurant) RestoreSnapshot(s interface{}) error {
+	return nil
+}
+
+func handler(a *Restaurant) cqrs.DataHandler {
 	return func(e interface{}) error {
 		switch e := e.(type) {
 		case *events.Created:

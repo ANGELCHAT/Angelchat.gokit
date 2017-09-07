@@ -28,7 +28,7 @@ type Query struct {
 	people  map[string]Person
 }
 
-func (q *Query) Listen(a cqrs.Aggregate, ce []cqrs.Event, es []interface{}) {
+func (q *Query) Listen(a cqrs.CQRSAggregate, ce []cqrs.Event, es []interface{}) {
 	for _, event := range es {
 		switch e := event.(type) {
 		case *events.Created:

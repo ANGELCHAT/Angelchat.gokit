@@ -1,38 +1,60 @@
 package example
 
 import (
+	"fmt"
+
+	"time"
+
 	"github.com/sokool/gokit/cqrs"
 	"github.com/sokool/gokit/cqrs/example/events"
 	"github.com/sokool/gokit/cqrs/example/query"
 )
 
+type Snapshot struct {
+	Version uint
+
+	Name string
+	Info string
+	Menu []string
+
+	Subscriptions map[string]subscription
+
+	Created   time.Time
+	Scheduled time.Time
+	Canceled  time.Time
+}
+
 var Query = query.New()
 
-var service = cqrs.New(
+var service = cqrs.NewRepository(
+	Factory,
 	events.All,
 	cqrs.EventHandler(Query.Listen),
 )
 
-func Restaurant() *restaurant {
-	a := &restaurant{}
-	a.Root = cqrs.NewAggregate("restaurant", Handler(a))
-	return a
+func New() *Restaurant {
+	return service.Aggregate().(*Restaurant)
 }
 
-func Load(id string) (*restaurant, error) {
-	var err error
-	a := Restaurant()
-	if a.Root, err = service.Load(id, Handler(a)); err != nil {
+func Load(id string) (*Restaurant, error) {
+	a, err := service.Load(id)
+	if err != nil {
 		return nil, err
 	}
 
-	return a, nil
-}
-
-func Save(a *restaurant) (string, error) {
-	if err := service.Save(a.Root); err != nil {
-		return "", err
+	r, ok := a.(*Restaurant)
+	if !ok {
+		return nil, fmt.Errorf("wrong restaurant type")
 	}
 
-	return a.Root.ID.String(), nil
+	return r, nil
+}
+
+func Save(a *Restaurant) error {
+	return service.Save(a)
+}
+
+func Factory() (cqrs.Aggregate, cqrs.DataHandler) {
+	r := &Restaurant{}
+	return r, handler(r)
 }
