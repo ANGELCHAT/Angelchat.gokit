@@ -31,10 +31,10 @@ type (
 	}
 
 	MealChanged struct {
-		Person      string
-		PreviewMeal string
-		ActualMeal  string
-		At          time.Time
+		Person       string
+		PreviousMeal string
+		ActualMeal   string
+		At           time.Time
 	}
 )
 

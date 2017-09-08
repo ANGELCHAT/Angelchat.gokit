@@ -82,7 +82,7 @@ func (a *Root) Apply(e interface{}) error {
 }
 
 func (a *Root) String() string {
-	return fmt.Sprintf("#%s: v%d.%s:ROOT", a.ID[24:], a.Version, a.Type)
+	return fmt.Sprintf("#%s: v%d.%s", a.ID[24:], a.Version, a.Type)
 }
 func newRoot(h DataHandler, name string) *Root {
 	return &Root{
@@ -100,7 +100,7 @@ type CQRSAggregate struct {
 }
 
 func (a *CQRSAggregate) String() string {
-	return fmt.Sprintf("#%s: v%d.%s:AGGREGATE",
+	return fmt.Sprintf("#%s: v%d.%s",
 		a.ID[24:], a.Version, a.Type)
 }
 

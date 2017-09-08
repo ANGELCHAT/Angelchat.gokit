@@ -129,21 +129,20 @@ func (m *mem) Events(fromVersion uint64, id string) ([]Event, error) {
 	m.LastLoadID = id
 	m.LastLoadVersion = fromVersion
 
-	log.Debug("cqrs.store.events",
-		"aggregate:%s from %d version", id, fromVersion)
+	//log.Debug("cqrs.store.events",
+	//	"aggregate:%s from %d version", id, fromVersion)
 
 	var events []Event
 
-	if fromVersion > 0 {
-		for i := int(fromVersion); i <= len(m.events[id]); i++ {
-			log.Debug("cqrs.store.events.iterator", "version:%d, %d",
-				i, m.events[id][i-1].version)
-		}
-	}
+	//if fromVersion > 0 {
+	//	for i := int(fromVersion); i <= len(m.events[id]); i++ {
+	//		log.Debug("cqrs.store.events.iterator", "version:%d, %d",
+	//			i, m.events[id][i-1].version)
+	//	}
+	//}
 
-	for i, e := range m.events[id] {
-		log.Debug("cqrs.store.events.loading",
-			"idx:%d, version:%d", i, e.version)
+	for _, e := range m.events[id] {
+		//log.Debug("cqrs.store.events.loading", "%+v", e)
 
 		events = append(events, Event{
 			ID:      e.id,

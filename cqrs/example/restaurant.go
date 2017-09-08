@@ -39,9 +39,42 @@ func (a *Restaurant) Set(r *cqrs.Root) {
 	a.root = r
 }
 
+func (a *Restaurant) TakeSnapshot() interface{} {
+	return Snapshot{
+		Version:       1,
+		Name:          a.name,
+		Info:          a.info,
+		Menu:          a.menu,
+		Subscriptions: a.subscriptions,
+		Created:       a.created,
+		Scheduled:     a.scheduled,
+		Canceled:      a.canceled,
+	}
+}
+
+func (a *Restaurant) RestoreSnapshot(s interface{}) error {
+	return nil
+}
+
 //
 // Business Methods
 //
+
+func (a *Restaurant) Create(name, info string, menu ...string) error {
+	if !a.created.IsZero() {
+		return fmt.Errorf("restaurant %s is already created", a.name)
+	}
+
+	a.Root().Apply(&events.Created{
+		Restaurant: name,
+		Info:       info,
+		Menu:       menu,
+		At:         time.Now(),
+	})
+
+	return nil
+}
+
 func (a *Restaurant) Subscribe(person, meal string) error {
 	if !a.canceled.IsZero() {
 		return fmt.Errorf("%s subscriptions has been canceled", a.name)
@@ -52,10 +85,10 @@ func (a *Restaurant) Subscribe(person, meal string) error {
 
 	if ok {
 		a.Root().Apply(&events.MealChanged{
-			Person:      person,
-			PreviewMeal: s.meal,
-			ActualMeal:  meal,
-			At:          d})
+			Person:       person,
+			PreviousMeal: s.meal,
+			ActualMeal:   meal,
+			At:           d})
 
 		return nil
 	}
@@ -114,38 +147,6 @@ func (a *Restaurant) Cancel() error {
 		People:     people,
 		At:         time.Now()})
 
-	return nil
-}
-
-func (a *Restaurant) Create(name, info string, menu ...string) error {
-	if !a.created.IsZero() {
-		return fmt.Errorf("restaurant %s is already created", a.name)
-	}
-
-	a.Root().Apply(&events.Created{
-		Restaurant: name,
-		Info:       info,
-		Menu:       menu,
-		At:         time.Now(),
-	})
-
-	return nil
-}
-
-func (a *Restaurant) TakeSnapshot() interface{} {
-	return Snapshot{
-		Version:       1,
-		Name:          a.name,
-		Info:          a.info,
-		Menu:          a.menu,
-		Subscriptions: a.subscriptions,
-		Created:       a.created,
-		Scheduled:     a.scheduled,
-		Canceled:      a.canceled,
-	}
-}
-
-func (a Restaurant) RestoreSnapshot(s interface{}) error {
 	return nil
 }
 

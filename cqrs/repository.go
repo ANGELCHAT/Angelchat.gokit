@@ -34,7 +34,7 @@ func (s *Repository) Save(a Aggregate) error {
 	log.Info("cqrs.save.aggregate", "%s with %d new events",
 		aggregate.String(), len(r.events))
 
-	for _, o := range r.events {
+	for i, o := range r.events {
 		structure := newStructure(o)
 		data, err := s.serializer.Marshal(structure.Name, o)
 		if err != nil {
@@ -51,7 +51,7 @@ func (s *Repository) Save(a Aggregate) error {
 			Version: aggregate.Version,
 		})
 
-		//log.Debug("cqrs.save.event", events[i].String())
+		log.Debug("cqrs.save.aggregate.event", events[i].String())
 	}
 
 	// store aggregate state
@@ -120,6 +120,7 @@ func (s *Repository) Load(id string) (Aggregate, error) {
 			log.Error("cqrs.handle.event", err)
 			return nil, err
 		}
+		log.Debug("cqrs.load.aggregate.event", "%s", event.String())
 	}
 
 	return aggregate, nil
