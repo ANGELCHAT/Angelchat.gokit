@@ -2,81 +2,119 @@ package cqrs
 
 import "github.com/sokool/gokit/log"
 
-type Snapshotter struct {
+type snapshotter struct {
 	frequency  uint
 	kind       string
-	store      Store
-	repo       *Repository
+	events     *events
+	factory    func() Aggregate
 	serializer *serializer
-	snapStruct structure
+	snapshot   structure
 }
 
-func (s *Snapshotter) Run() {
-	as, err := s.store.Last(s.kind, s.frequency)
+// Making a snapshot algorythym:
+// todo: combine 1,2 into one?
+// 1. Load all Aggregates of given type where
+// 	  aggregate.version - last_snap.version > frequency
+// 2. Load last snapshot and restore it on Aggregate.
+// 3. Load all the Events from snap.version and process them on Aggregate
+// 4. Take snapshot of Aggregate
+// 5. Save snapshot of Aggregate with version = Aggregate.version
+
+// s.factory
+func (s *snapshotter) process() {
+	//log.Info("cqrs.snapshot", "running...")
+
+	//1. load aggregates... snapshooter
+	aggregates, err := s.events.store.Last(s.kind, s.frequency)
 	if err != nil {
-		log.Error("cqrs.snapshot.last", err)
+		log.Error("cqrs.snapshot.load-last", err)
 		return
 	}
 
-	for _, a := range as {
-		aggregate, err := s.repo.Load(a.ID)
+	for _, a := range aggregates {
+		aggregate := s.factory()
+		aggregate.Root().init(a.ID, a.Version)
+
+		//2. load last snap and restore aggregate with given snapshot data
+		version, data := s.events.store.Snapshot(aggregate.Root().ID)
+		if len(data) > 0 {
+			snapshot, err := s.serializer.Unmarshal(s.snapshot.Name, data)
+			if err != nil {
+				log.Error("cqrs.snapshot.unmarshal", err)
+				continue
+			}
+
+			if err := aggregate.RestoreSnapshot(snapshot); err != nil {
+				log.Error("cqrs.snapshot.restore", err)
+				continue
+			}
+		}
+
+		// 3. Load all the Events from snap.version and process them on Aggregate
+		num, err := s.events.load(aggregate, version)
 		if err != nil {
-			log.Error("cqrs.snapshot.aggregate.load", err)
+			log.Error("cqrs.snapshot.events-load", err)
 			continue
 		}
-		//log.Info("cqrs.snap.test", aggregate.Root().String())
-		snap, err := s.serializer.Marshal(s.snapStruct.Name, aggregate.TakeSnapshot())
+
+		// 4. Take snapshot of Aggregate
+		data, err = s.serializer.Marshal(s.snapshot.Name, aggregate.TakeSnapshot())
 		if err != nil {
 			log.Error("cqrs.snapshot.marshal", err)
 			continue
 		}
 
-		if err = s.store.Make(Snapshot{
-			AggregateID: aggregate.Root().ID,
-			Version:     aggregate.Root().Version,
-			Data:        snap}); err != nil {
-
-			log.Error("cqrs.snapshot.save", err)
+		// 5. Save snapshot of Aggregate with version = Aggregate.version
+		v := Snapshot{aggregate.Root().ID, data, aggregate.Root().Version}
+		if err = s.events.store.Make(v); err != nil {
+			log.Error("cqrs.snapshot.make", err)
 			continue
 		}
 
-		log.Info("cqrs.snapshot.success", aggregate.Root().String())
+		log.Info(
+			"cqrs.snapshot", "%s.#%s.v%d taken, rebuilded "+
+				"from .v%d, with %d processed events",
+			a.Type, a.ID[24:], a.Version, version, num)
 	}
 }
 
-func (s *Snapshotter) Load(id string) (Aggregate, error) {
+func (s *snapshotter) Load(a Aggregate) error {
 
-	version, data := s.repo.opts.Storage.Snapshot(id)
-	aggregate, handler := s.repo.factory()
-	root := newRoot(handler, s.repo.name)
-	root.init(id, version)
-	aggregate.Set(root)
+	version, data := s.events.store.Snapshot(a.Root().ID)
 
-	log.Info("cqrs.snapshot.load", "#%s v.%d", id[24:], version)
-	if len(data) == 0 {
-		return aggregate, nil
+	// we have snapshot, restore it!
+	if len(data) > 0 {
+		snapshot, err := s.serializer.Unmarshal(s.snapshot.Name, data)
+		if err != nil {
+			return err
+		}
+
+		if err := a.RestoreSnapshot(snapshot); err != nil {
+			return err
+		}
 	}
 
-	snapshot, err := s.serializer.Unmarshal(s.snapStruct.Name, data)
+	events, err := s.events.load(a, version)
 	if err != nil {
-		return nil, err
+		return err
 	}
 
-	if err := aggregate.RestoreSnapshot(snapshot); err != nil {
-		return nil, err
-	}
+	log.Info("cqrs.snapshot",
+		"%s.#%s.v%d restored from .v%d snapshot with %d events",
+		a.Root().Type, a.Root().ID[24:], a.Root().Version, version, events)
 
-	return aggregate, nil
+	return nil
 }
 
-func NewSnapshotter(kind string, frequency uint, s Store, r *Repository) *Snapshotter {
-	sStruct := r.Aggregate().TakeSnapshot()
-	return &Snapshotter{
+func newSnapshotter(frequency uint, e *events, f func() Aggregate) *snapshotter {
+	a := f()
+	sStruct := a.TakeSnapshot()
+	return &snapshotter{
 		frequency:  frequency,
-		store:      s,
-		repo:       r,
-		kind:       kind,
-		snapStruct: newStructure(sStruct),
+		events:     e,
+		factory:    f,
+		kind:       a.Root().Type,
+		snapshot:   newStructure(sStruct),
 		serializer: newSerializer(sStruct),
 	}
 }

@@ -6,6 +6,8 @@ import (
 
 	"reflect"
 
+	"encoding/json"
+
 	"github.com/sokool/gokit/cqrs"
 	"github.com/sokool/gokit/cqrs/example/events"
 )
@@ -23,7 +25,7 @@ type Restaurant struct {
 	name          string
 	info          string
 	menu          []string
-	subscriptions map[string]subscription
+	Subscriptions map[string]subscription
 
 	created   time.Time
 	scheduled time.Time
@@ -39,20 +41,40 @@ func (a *Restaurant) Set(r *cqrs.Root) {
 	a.root = r
 }
 
+func (a *Restaurant) String() string {
+	b, _ := json.Marshal(a)
+	return string(b)
+}
+
 func (a *Restaurant) TakeSnapshot() interface{} {
 	return Snapshot{
 		Version:       1,
 		Name:          a.name,
 		Info:          a.info,
 		Menu:          a.menu,
-		Subscriptions: a.subscriptions,
+		Subscriptions: a.Subscriptions,
 		Created:       a.created,
 		Scheduled:     a.scheduled,
 		Canceled:      a.canceled,
 	}
 }
 
-func (a *Restaurant) RestoreSnapshot(s interface{}) error {
+func (a *Restaurant) RestoreSnapshot(v interface{}) error {
+	s, ok := v.(*Snapshot)
+	if !ok {
+		return fmt.Errorf("wront snapshot type[%s] in %s",
+			reflect.TypeOf(s).String(),
+			a.root.Type)
+	}
+
+	a.name = s.Name
+	a.info = s.Info
+	a.menu = s.Menu
+	a.Subscriptions = s.Subscriptions
+	a.created = s.Created
+	a.scheduled = s.Scheduled
+	a.canceled = s.Canceled
+
 	return nil
 }
 
@@ -81,7 +103,7 @@ func (a *Restaurant) Subscribe(person, meal string) error {
 	}
 
 	d := time.Now()
-	s, ok := a.subscriptions[person]
+	s, ok := a.Subscriptions[person]
 
 	if ok {
 		a.Root().Apply(&events.MealChanged{
@@ -138,7 +160,7 @@ func (a *Restaurant) Cancel() error {
 		return fmt.Errorf("%s already canceled", a.name)
 	}
 
-	for _, p := range a.subscriptions {
+	for _, p := range a.Subscriptions {
 		people = append(people, p.person)
 	}
 
@@ -155,21 +177,21 @@ func handler(a *Restaurant) cqrs.DataHandler {
 		switch e := e.(type) {
 		case *events.Created:
 			a.name, a.info, a.menu = e.Restaurant, e.Info, e.Menu
-			a.subscriptions = map[string]subscription{}
+			a.Subscriptions = map[string]subscription{}
 			a.created = e.At
 
 		case *events.Scheduled:
 			a.scheduled = e.On
 
 		case *events.MealSelected:
-			a.subscriptions[e.Person] = subscription{
+			a.Subscriptions[e.Person] = subscription{
 				person: e.Person,
 				meal:   e.Meal,
 				on:     e.At,
 			}
 
 		case *events.MealChanged:
-			a.subscriptions[e.Person] = subscription{
+			a.Subscriptions[e.Person] = subscription{
 				person: e.Person,
 				meal:   e.ActualMeal,
 				on:     e.At,

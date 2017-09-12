@@ -8,164 +8,113 @@ import (
 
 type Repository struct {
 	name        string
-	serializer  *serializer
 	factory     Factory
 	opts        *Options
-	snapshotter *Snapshotter
+	snapshotter *snapshotter
+
+	events *events
 }
 
 func (s *Repository) Aggregate() Aggregate {
-	return s.aggregateInstance("", 0)
+	aggregate := s.aggregateInstance()
+	aggregate.Root().init("", 0)
+	return aggregate
 }
 
 func (s *Repository) Save(a Aggregate) error {
-	var r *Root = a.Root()
-	var events []Event
-	var aggregate = CQRSAggregate{
-		ID:      r.ID,
-		Type:    s.name,
-		Version: r.Version,
-	}
 
-	if len(aggregate.ID) == 0 {
-		aggregate.ID = generateID()
-	}
-
-	log.Info("cqrs.save.aggregate", "%s with %d new events",
-		aggregate.String(), len(r.events))
-
-	for i, o := range r.events {
-		structure := newStructure(o)
-		data, err := s.serializer.Marshal(structure.Name, o)
-		if err != nil {
-			log.Error("cqrs.save.event", err)
-			return err
-		}
-
-		aggregate.Version++
-		events = append(events, Event{
-			ID:      generateID(),
-			Type:    structure.Name,
-			Data:    data,
-			Created: time.Now(),
-			Version: aggregate.Version,
-		})
-
-		log.Debug("cqrs.save.aggregate.event", events[i].String())
-	}
-
-	// store aggregate state
-	if err := s.opts.Storage.Save(aggregate, events); err != nil {
-		log.Error("cqrs.save.aggregate", err)
+	events, err := s.events.save(a)
+	if err != nil {
+		log.Error("cqrs.repository", err)
 		return err
 	}
 
-	// send events to listeners of aggregate
-	if s.opts.Handlers != nil {
-		for _, eh := range s.opts.Handlers {
-			eh(aggregate, events, r.events)
-		}
-	}
+	log.Info("cqrs.repository", "%s saved with %d new events",
+		a.Root().String(), events)
 
-	r.init(aggregate.ID, aggregate.Version)
-	r.events = []interface{}{}
+	// send events to listeners of aggregate
+	//if s.opts.Handlers != nil {
+	//	for _, eh := range s.opts.Handlers {
+	//		eh(aggregate, events, r.events)
+	//	}
+	//}
 
 	return nil
 }
 
 func (s *Repository) Load(id string) (Aggregate, error) {
-	var version uint64
-	var aggregate Aggregate
+	var aggregate = s.aggregateInstance()
 	var err error
 
-	// take events from last snapshot?
-	if s.snapshotter != nil {
-		aggregate, err = s.snapshotter.Load(id)
-		if err != nil {
-			return nil, err
-		}
-	} else {
-		a, err := s.opts.Storage.Load(id)
-		if err != nil {
-			return nil, err
-		}
-
-		aggregate = s.aggregateInstance(a.ID, a.Version)
-	}
-
-	//// check if aggregate is stored.
-	//ca, err := s.opts.Storage.Load(id)
-	//if err != nil {
-	//	return nil, err
-	//}
-	//
-	log.Info("cqrs.load.aggregate", "%s", aggregate.Root().String())
-
-	// load aggregate events from given version.
-
-	// todo do not load from last snapshotted version until user decide to!
-	events, err := s.opts.Storage.Events(version, id)
+	a, err := s.opts.Storage.Load(id)
 	if err != nil {
 		return nil, err
 	}
-	var event Event
-	for _, event = range events {
-		e, err := s.serializer.Unmarshal(event.Type, event.Data)
-		if err != nil {
-			log.Error("cqrs.load.event", err)
+
+	aggregate.Root().init(a.ID, a.Version)
+
+	// take aggregate from last snapshot?
+	if s.snapshotter != nil {
+		if err = s.snapshotter.Load(aggregate); err != nil {
 			return nil, err
 		}
 
-		if err := aggregate.Root().handler(e); err != nil {
-			log.Error("cqrs.handle.event", err)
-			return nil, err
-		}
-		log.Debug("cqrs.load.aggregate.event", "%s", event.String())
+		return aggregate, nil
 	}
+
+	// load aggregate events from given version.
+	events, err := s.events.load(aggregate, 0)
+	if err != nil {
+		return aggregate, err
+	}
+
+	log.Info("cqrs.repository", "%s loaded, rebuilded from beginning by processing %d events",
+		aggregate.Root(), events)
 
 	return aggregate, nil
 }
 
-func (s *Repository) aggregateInstance(id string, version uint64) Aggregate {
-	a, h := s.factory()
-	r := newRoot(h, s.name)
-	r.init(id, version)
-	a.Set(r)
+func (s *Repository) aggregateInstance() Aggregate {
+	aggregate, handler := s.factory()
+	aggregate.Set(newRoot(handler, s.name))
 
-	return a
+	return aggregate
 }
 
 //todo return error
 func (s *Repository) Snapshotter(everyVersion uint, frequency time.Duration) {
 	if s.snapshotter != nil {
-
 		return
 	}
 
-	s.snapshotter = NewSnapshotter(s.name, everyVersion, s.opts.Storage, s)
+	s.snapshotter = newSnapshotter(everyVersion, s.events, s.aggregateInstance)
 	timer := time.NewTicker(frequency)
 
 	go func(t *time.Ticker) {
-		log.Info("cqrs.snapshot.start", "%s, every %s and %d version",
+		log.Info("cqrs.snapshot", "starting %s snapshotter every %s and every %d version",
 			s.name, frequency, everyVersion)
 
 		//todo break that loop
 		for range t.C {
-			s.snapshotter.Run()
+			s.snapshotter.process()
 		}
 
-		log.Info("cqrs.snapshot.stop", s.name)
+		log.Info("cqrs.snapshot", s.name)
 	}(timer)
 
 }
 
 func NewRepository(f Factory, es []interface{}, os ...Option) *Repository {
 	aggregate, _ := f()
+	options := newOptions(os...)
 
 	return &Repository{
-		serializer: newSerializer(es...),
-		opts:       newOptions(os...),
-		factory:    f,
-		name:       newStructure(aggregate).Name,
+		opts:    options,
+		factory: f,
+		name:    newStructure(aggregate).Name,
+		events: &events{
+			store:      options.Storage,
+			serializer: newSerializer(es...),
+		},
 	}
 }

@@ -20,14 +20,18 @@ func init() {
 }
 
 func TestRootID(t *testing.T) {
-	// When restaurant aggregate is saved, new ID should be assigned
-	// in restaurant root.
-
+	// WHEN Restaurant aggregate is instantiated, without events
+	// definitions
 	repo := cqrs.NewRepository(example.Factory, nil)
 	r1 := repo.Aggregate().(*example.Restaurant)
 
+	// EXPECTS that ID is empty
 	is.True(t, r1.Root().ID == "", "expects empty aggregate ID")
+
+	// THEN Restaurant is saved,
 	is.NotErr(t, repo.Save(r1))
+
+	// EXPECTS that
 	is.True(t, r1.Root().ID != "", "expects aggregate ID")
 
 	// When restaurant is saving and error appears, then ID should not
@@ -123,22 +127,25 @@ func TestAggregateVersion(t *testing.T) {
 	is.NotErr(t, r.Subscribe("Tom", "Food"))
 	is.True(t, r.Root().Version == 0, "version 0 expected")
 
-	is.NotErr(t, aggregate.Save(r))
-	is.True(t, r.Root().Version == 2, "expected 2, got %d", r.Root().Version)
-	is.NotErr(t, r.Subscribe("Greg", "Burger"))
+	is.Ok(t, aggregate.Save(r))
 	is.True(t, r.Root().Version == 2, "expected 2, got %d", r.Root().Version)
 
-	is.NotErr(t, aggregate.Save(r))
+	is.Ok(t, r.Subscribe("Greg", "Burger"))
+	is.True(t, r.Root().Version == 2, "expected 2, got %d", r.Root().Version)
+
+	is.Ok(t, aggregate.Save(r))
 	is.True(t, r.Root().Version == 3, "expected 3, got %d", r.Root().Version)
 
 	r2, err := aggregate.Load(r.Root().ID)
 	is.Ok(t, err)
 
-	is.NotErr(t, r.Subscribe("Albert", "Soup"))
-	is.NotErr(t, r.Subscribe("Mike", "Sandwitch"))
+	is.Ok(t, r.Subscribe("Albert", "Soup"))
+	is.Ok(t, r.Subscribe("Mike", "Sandwitch"))
 	is.Equal(t, uint64(3), r2.Root().Version)
-	is.NotErr(t, aggregate.Save(r))
+	is.Ok(t, aggregate.Save(r))
 	is.Equal(t, uint64(5), r.Root().Version)
+
+	is.Err(t, aggregate.Save(r2), "transaction failed")
 }
 
 func TestEventHandling(t *testing.T) {
@@ -165,7 +172,7 @@ func TestEventHandling(t *testing.T) {
 	r.Subscribe("Tom", "Food A")
 	r.Subscribe("Greg", "Food B")
 	r.Subscribe("Janie", "Food C")
-	repo.Save(r)
+	is.NotErr(t, repo.Save(r))
 
 	expected = "Tavern" +
 		time.Now().AddDate(0, 0, 1).Format("2006-01-02") +
@@ -191,54 +198,70 @@ func TestSnapshotInGivenVersion(t *testing.T) {
 	r.Subscribe("Person#2", "D")
 	is.Ok(t, repo.Save(r))
 	time.Sleep(time.Second) // wait a while, to let snapshot run first
-	sv, _ := store.Snapshot(r.Root().ID)
 
 	// I EXPECT Restaurant in version 3 and last snapshot in version 0
+	snapVersion, _ := store.Snapshot(r.Root().ID)
 	is.Equal(t, uint64(3), r.Root().Version)
-	is.Equal(t, uint64(0), sv)
+	is.Equal(t, uint64(0), snapVersion)
 
 	// THEN I add another 2 subscriptions and wait 1.5 sec
-	r.Subscribe("Person#1", "A")
-	r.Subscribe("Person#2", "D")
+	r.Subscribe("Person#3", "A")
+	r.Subscribe("Person#4", "D")
 	is.Ok(t, repo.Save(r))
 	time.Sleep(time.Second) // wait a while, to let snapshot run first
-	sv, _ = store.Snapshot(r.Root().ID)
 
 	// I EXPECT restaurant in version 5 and snapshot in version 5.
+	snapVersion, _ = store.Snapshot(r.Root().ID)
 	is.Equal(t, uint64(5), r.Root().Version)
-	is.Equal(t, uint64(5), sv)
+	is.Equal(t, uint64(5), snapVersion)
 
 	// THEN I add another 4 Subscriptions
-	for i := 0; i < 4; i++ {
+	for i := 5; i < 9; i++ {
 		r.Subscribe(fmt.Sprintf("Person#%d", i), "A")
 	}
 	is.Ok(t, repo.Save(r))
 	time.Sleep(time.Second) // wait a while, to let snapshot run first
-	sv, _ = store.Snapshot(r.Root().ID)
+	snapVersion, _ = store.Snapshot(r.Root().ID)
 
 	// I EXPECT restaurant in version 9 and snapshot in version 5.
 	is.Equal(t, uint64(9), r.Root().Version)
-	is.Equal(t, uint64(5), sv)
+	is.Equal(t, uint64(5), snapVersion)
+
+	// THEN I add another 2 more subscriptions and wait 1 sec
+	r.Subscribe("Person#X", "Ax")
+	r.Subscribe("Person#Y", "Dx")
+	r.Subscribe("AL", "ad")
+
+	is.Ok(t, repo.Save(r))
+	time.Sleep(time.Second) // wait a while, to let snapshot run first
+
+	//fmt.Printf("%s", r.String())
+	//time.Sleep(2 * time.Second)
 
 }
 
 func TestAggregateLoadFromLastSnapshot(t *testing.T) {
 	// WHEN I tell repository to make a snapshot of Restaurant
-	// every 0.5 second and every 2 events.
+	// every 0.1 second and every 2 events.
 	store := cqrs.NewMemoryStorage()
 	repo := cqrs.NewRepository(example.Factory, events.All, cqrs.Storage(store))
-	repo.Snapshotter(2, 500*time.Millisecond)
+	repo.Snapshotter(2, 100*time.Millisecond)
 
-	// THEN I will crate Restaurant and assign 5 subscriptions, waiting 1 sec
+	// THEN I will crate Restaurant and assign 3 subscriptions
 	r := repo.Aggregate().(*example.Restaurant)
-	r.Create("Restaurant A", "Description", "Meal A", "Meal B")
-	r.Subscribe("Person#1", "A")
-	r.Subscribe("Person#2", "D")
-	r.Subscribe("Person#2", "D")
-	r.Subscribe("Person#2", "D")
-	r.Subscribe("Person#2", "D")
+	is.Ok(t, r.Create("Restaurant A", "Description", "Meal A", "Meal B"))
+	is.Ok(t, r.Subscribe("Person#1", "A"))
+	is.Ok(t, r.Subscribe("Person#2", "D"))
 	is.Ok(t, repo.Save(r))
-	time.Sleep(time.Second) // wait a while, to let snapshot run first
+	time.Sleep(500 * time.Millisecond) // wait a while, to let snapshot run first
+
+	// THEN I will assign 4 more subscriptions
+	is.Ok(t, r.Subscribe("Person#2", "A"))
+	is.Ok(t, r.Subscribe("Person#2", "B"))
+	is.Ok(t, r.Subscribe("Person#2", "C"))
+	is.Ok(t, r.Subscribe("Person#2", "A"))
+	is.Ok(t, repo.Save(r))
+	time.Sleep(500 * time.Millisecond) // wait a while, to let snapshot run first
 
 	//THEN I load that Restaurant again
 	r2, err := repo.Load(r.Root().ID)
@@ -247,7 +270,35 @@ func TestAggregateLoadFromLastSnapshot(t *testing.T) {
 	// I EXPECT that last loaded aggregate from storage was
 	// called with ID=r2.ID and from version=6
 	is.Equal(t, r2.Root().ID, store.LastLoadID)
-	is.Equal(t, uint64(6), store.LastLoadVersion)
+	is.Equal(t, uint64(7), store.LastLoadVersion)
+
+	//THEN I load that Restaurant again
+	a, err := repo.Load(r2.Root().ID)
+	r3 := a.(*example.Restaurant)
+
+	//I EXPECT last loaded Restaurant ID equal to previous
+	//and last loaded version 7
+	is.Ok(t, err)
+	is.Equal(t, r2.Root().ID, store.LastLoadID)
+	is.Equal(t, uint64(7), store.LastLoadVersion)
+
+	// THEN I will assign 4 more subscriptions
+	is.Ok(t, r3.Subscribe("Person#3", "A"))
+	is.Ok(t, r3.Subscribe("Person#4", "B"))
+	is.Ok(t, r3.Subscribe("Person#3", "B"))
+	is.Ok(t, r3.Subscribe("Person#4", "A"))
+	is.Ok(t, repo.Save(r3))
+
+	//THEN I load that Restaurant again
+	a, err = repo.Load(r3.Root().ID)
+	r4 := a.(*example.Restaurant)
+
+	//I EXPECT last loaded Restaurant ID equal to previous one
+	//and last loaded version 7, but Restaurant in version 11
+	is.Ok(t, err)
+	is.Equal(t, r4.Root().ID, store.LastLoadID)
+	is.Equal(t, uint64(7), store.LastLoadVersion)
+	is.Equal(t, uint64(11), r4.Root().Version)
 
 }
 

@@ -82,8 +82,9 @@ func (a *Root) Apply(e interface{}) error {
 }
 
 func (a *Root) String() string {
-	return fmt.Sprintf("#%s: v%d.%s", a.ID[24:], a.Version, a.Type)
+	return fmt.Sprintf("%s.#%s.v%d", a.Type, a.ID[24:], a.Version)
 }
+
 func newRoot(h DataHandler, name string) *Root {
 	return &Root{
 		Type:    name,

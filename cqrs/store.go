@@ -9,6 +9,8 @@ import (
 )
 
 type Store interface {
+	//SNAPSHOT METHODS
+
 	// Last is calculated by subtracting the last snapshot version
 	// from the current version with a where clause that only returned the
 	// aggregates with a difference greater than some number. This query
@@ -17,13 +19,12 @@ type Store interface {
 	// to create the snapshots (if using	multiple snapshotters the
 	// competing consumer pattern works well here).
 	Last(kind string, vFrequency uint) ([]CQRSAggregate, error)
-
 	Make(s Snapshot) error
 	Snapshot(aggregate string) (uint64, []byte)
 
+	//EVENT METHODS
 	Load(id string) (CQRSAggregate, error)
 	Save(CQRSAggregate, []Event) error
-
 	// load all aggregates and events from given version.
 	Events(version uint64, aggregate string) ([]Event, error)
 }
@@ -54,30 +55,21 @@ func (m *mem) Make(s Snapshot) error {
 func (m *mem) Last(kind string, frequency uint) ([]CQRSAggregate, error) {
 	var o []CQRSAggregate
 	for _, a := range m.aggregates {
-		var sv uint64
+		var version uint64
 		if a.Type != kind {
 			continue
 		}
-		//log.Debug("cqrs.store.last", "%s", a.String())
 		s, ok := m.snapshots[a.ID]
 		if ok {
-			sv = s.Version
+			version = s.Version
 		}
 
-		is := a.Version - sv
-
+		is := a.Version - version
 		if uint(is) < frequency {
-			log.Debug("cqrs.store.last",
-				"every %d, waiting for %d more events",
-				frequency, frequency-uint(is))
 			continue
 		}
 
-		o = append(o, CQRSAggregate{
-			ID:      a.ID,
-			Version: sv,
-			Type:    a.Type,
-		})
+		o = append(o, a)
 	}
 
 	return o, nil
@@ -101,16 +93,6 @@ func (m *mem) Snapshot(aggregateID string) (uint64, []byte) {
 }
 
 func (m *mem) Save(a CQRSAggregate, es []Event) error {
-	// this method should be transactional
-	// check if aggregate has not been changed by other request!
-	if l, err := m.Load(a.ID); err == nil {
-		if (a.Version - uint64(len(es))) != l.Version {
-			return fmt.Errorf(
-				"%s version missmatch, arrived: %d, expects: %d",
-				a.Type, a.Version, l.Version)
-		}
-	}
-
 	m.aggregates[a.ID] = a
 	for _, e := range es {
 		m.events[a.ID] = append(m.events[a.ID], event{
@@ -129,20 +111,13 @@ func (m *mem) Events(fromVersion uint64, id string) ([]Event, error) {
 	m.LastLoadID = id
 	m.LastLoadVersion = fromVersion
 
-	//log.Debug("cqrs.store.events",
-	//	"aggregate:%s from %d version", id, fromVersion)
-
 	var events []Event
 
-	//if fromVersion > 0 {
-	//	for i := int(fromVersion); i <= len(m.events[id]); i++ {
-	//		log.Debug("cqrs.store.events.iterator", "version:%d, %d",
-	//			i, m.events[id][i-1].version)
-	//	}
-	//}
-
-	for _, e := range m.events[id] {
-		//log.Debug("cqrs.store.events.loading", "%+v", e)
+	for i := int(fromVersion); i < len(m.events[id]); i++ {
+		e := m.events[id][i]
+		if fromVersion > 0 {
+			e = m.events[id][i-1]
+		}
 
 		events = append(events, Event{
 			ID:      e.id,
@@ -151,6 +126,8 @@ func (m *mem) Events(fromVersion uint64, id string) ([]Event, error) {
 			Version: e.version,
 			Created: time.Time{},
 		})
+		log.Debug("cqrs.store.events", "loading event %s v.%d",
+			e.kind, e.version)
 	}
 
 	return events, nil
