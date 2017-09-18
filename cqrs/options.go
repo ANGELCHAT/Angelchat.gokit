@@ -1,28 +1,32 @@
 package cqrs
 
+import "time"
+
 // todo: custom logger implementation
 // todo: custom id generator - separate for events and aggregator?
 //		 do I need id for event since I have uint Version?
 // todo: every loaded aggregate is kept in memory(cache), only generated events are stored
 // 		 it is a form of caching, memoization?
 // todo rebuild aggregate based on manually given version and/or date?
-// todo make a snapshot of aggregate, as a separate process
+// todo consider snapshoting on save instead seperate process
 
 // for external use ie. another aggregate
 type HandlerFunc func(CQRSAggregate, []Event, []interface{})
 
 type Options struct {
-	Handlers []HandlerFunc
-	Storage  Store
-	Name     string
-	Snapshot int
+	Handlers      []HandlerFunc
+	Store         Store
+	Name          string
+	SnapEpoch     uint
+	SnapFrequency time.Duration
+	Cache         bool
 }
 
 type Option func(*Options)
 
-func Storage(s Store) Option {
+func WithStorage(s Store) Option {
 	return func(o *Options) {
-		o.Storage = s
+		o.Store = s
 	}
 }
 
@@ -38,17 +42,18 @@ func Storage(s Store) Option {
 //	}
 //}
 
-//func KeepInMemory() Option {
-//	return func(o *Options) {
-//
-//	}
-//}
+func WithCache() Option {
+	return func(o *Options) {
+		o.Cache = true
+	}
+}
 
-//func Snapshot(epoch int) Option {
-//	return func(o *Options) {
-//		o.Snapshot = epoch
-//	}
-//}
+func WithSnapshot(epoch uint, frequency time.Duration) Option {
+	return func(o *Options) {
+		o.SnapEpoch = epoch
+		o.SnapFrequency = frequency
+	}
+}
 
 func EventHandler(fn HandlerFunc) Option {
 	return func(o *Options) {
@@ -74,7 +79,7 @@ func EventHandler(fn HandlerFunc) Option {
 //			os.Exit(-1)
 //		}
 //
-//		o.Storage = mongoStore(db, collection)
+//		o.WithStorage = mongoStore(db, collection)
 //	}
 //}
 
@@ -85,8 +90,8 @@ func newOptions(ops ...Option) *Options {
 		o(s)
 	}
 
-	if s.Storage == nil {
-		s.Storage = NewMemoryStorage()
+	if s.Store == nil {
+		s.Store = NewMemoryStorage()
 	}
 
 	return s

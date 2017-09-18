@@ -16,7 +16,7 @@ import (
 )
 
 func init() {
-	log.Default = log.New(log.Levels(os.Stdout, nil, os.Stderr))
+	log.Default = log.New(log.Levels(os.Stdout, os.Stdout, os.Stderr))
 }
 
 func TestRootID(t *testing.T) {
@@ -76,7 +76,7 @@ func TestAggregateAndEventsAppearanceInStorage(t *testing.T) {
 	// when I store restaurant without performing any command I expect that
 	// aggregate appears in storage without any generated events.
 	mem := cqrs.NewMemoryStorage()
-	aggregate := cqrs.NewRepository(example.Factory, nil, cqrs.Storage(mem))
+	aggregate := cqrs.NewRepository(example.Factory, nil, cqrs.WithStorage(mem))
 
 	r := aggregate.Aggregate().(*example.Restaurant)
 	is.Ok(t, aggregate.Save(r))
@@ -89,7 +89,7 @@ func TestAggregateAndEventsAppearanceInStorage(t *testing.T) {
 	aggregate = cqrs.NewRepository(
 		example.Factory,
 		[]interface{}{events.Created{}},
-		cqrs.Storage(mem))
+		cqrs.WithStorage(mem))
 
 	r = aggregate.Aggregate().(*example.Restaurant)
 	is.Ok(t, r.Create("McKenzy Food", "Burgers"))
@@ -103,7 +103,7 @@ func TestMultipleCommands(t *testing.T) {
 	aggregate := cqrs.NewRepository(
 		example.Factory,
 		[]interface{}{events.Created{}, events.MealSelected{}},
-		cqrs.Storage(mem))
+		cqrs.WithStorage(mem))
 
 	// when I send Create command twice, I expect error on second Create
 	// command call. After that, only one Created event should appear in storage.
@@ -118,7 +118,7 @@ func TestMultipleCommands(t *testing.T) {
 
 func TestAggregateVersion(t *testing.T) {
 	mem := cqrs.NewMemoryStorage()
-	aggregate := cqrs.NewRepository(example.Factory, events.All, cqrs.Storage(mem))
+	aggregate := cqrs.NewRepository(example.Factory, events.All, cqrs.WithStorage(mem))
 
 	r := aggregate.Aggregate().(*example.Restaurant)
 	is.True(t, r.Root().Version == 0, "version 0 expected")
@@ -144,8 +144,34 @@ func TestAggregateVersion(t *testing.T) {
 	is.Equal(t, uint64(3), r2.Root().Version)
 	is.Ok(t, aggregate.Save(r))
 	is.Equal(t, uint64(5), r.Root().Version)
+}
 
-	is.Err(t, aggregate.Save(r2), "transaction failed")
+//SCENARIO: Check aggregate transaction correctness
+func TestTransactionCorrectness(t *testing.T) {
+	//GIVEN I have Fresh Restaurant(r1) in version 3.
+	mem := cqrs.NewMemoryStorage()
+	repository := cqrs.NewRepository(example.Factory, events.All, cqrs.WithStorage(mem))
+	r1 := repository.Aggregate().(*example.Restaurant)
+
+	is.Ok(t, r1.Create("Restaurant", "Info", "Meal A", "Meal B"))
+	is.Ok(t, r1.Subscribe("Tom", "Food"))
+	is.Ok(t, r1.Subscribe("Tom", "Food2"))
+	is.Ok(t, repository.Save(r1))
+	is.Equal(t, uint64(3), r1.Root().Version)
+
+	//WHEN I load that Restaurant (r2)
+	a, err := repository.Load(r1.Root().ID)
+	is.Ok(t, err)
+	r2 := a.(*example.Restaurant)
+
+	//AND I subscribe in r1 and r2 separately
+	is.Ok(t, r1.Subscribe("Michel", "Y"))
+	is.Ok(t, r2.Subscribe("Paula", "X"))
+
+	//THEN I expect transaction error on second Restaurant while
+	//storing both Restaurants
+	is.Ok(t, repository.Save(r1))
+	is.Err(t, repository.Save(r2), "transaction failed")
 }
 
 func TestEventHandling(t *testing.T) {
@@ -188,8 +214,9 @@ func TestSnapshotInGivenVersion(t *testing.T) {
 	// WHEN I tell repository to make a snapshot of Restaurant every
 	// 5 versions and every 0.5 second
 	store := cqrs.NewMemoryStorage()
-	repo := cqrs.NewRepository(example.Factory, events.All, cqrs.Storage(store))
-	repo.Snapshotter(5, 500*time.Millisecond)
+	repo := cqrs.NewRepository(example.Factory, events.All,
+		cqrs.WithStorage(store),
+		cqrs.WithSnapshot(5, 500*time.Millisecond))
 
 	// THEN I will crate Restaurant and assign 2 subscriptions, and wait 1 sec
 	r := repo.Aggregate().(*example.Restaurant)
@@ -227,16 +254,18 @@ func TestSnapshotInGivenVersion(t *testing.T) {
 	is.Equal(t, uint64(9), r.Root().Version)
 	is.Equal(t, uint64(5), snapVersion)
 
-	// THEN I add another 2 more subscriptions and wait 1 sec
+	// THEN I add another 3 more subscriptions and wait 1 sec
 	r.Subscribe("Person#X", "Ax")
 	r.Subscribe("Person#Y", "Dx")
 	r.Subscribe("AL", "ad")
 
 	is.Ok(t, repo.Save(r))
 	time.Sleep(time.Second) // wait a while, to let snapshot run first
+	snapVersion, _ = store.Snapshot(r.Root().ID)
 
-	//fmt.Printf("%s", r.String())
-	//time.Sleep(2 * time.Second)
+	// I EXPECT restaurant in version 12 and snapshot in version 12.
+	is.Equal(t, uint64(12), r.Root().Version)
+	is.Equal(t, uint64(12), snapVersion)
 
 }
 
@@ -244,10 +273,11 @@ func TestAggregateLoadFromLastSnapshot(t *testing.T) {
 	// WHEN I tell repository to make a snapshot of Restaurant
 	// every 0.1 second and every 2 events.
 	store := cqrs.NewMemoryStorage()
-	repo := cqrs.NewRepository(example.Factory, events.All, cqrs.Storage(store))
-	repo.Snapshotter(2, 100*time.Millisecond)
+	repo := cqrs.NewRepository(example.Factory, events.All,
+		cqrs.WithStorage(store),
+		cqrs.WithSnapshot(2, 100*time.Millisecond))
 
-	// THEN I will crate Restaurant and assign 3 subscriptions
+	// THEN I will crate Restaurant (r) and call 3 commands
 	r := repo.Aggregate().(*example.Restaurant)
 	is.Ok(t, r.Create("Restaurant A", "Description", "Meal A", "Meal B"))
 	is.Ok(t, r.Subscribe("Person#1", "A"))
@@ -255,7 +285,7 @@ func TestAggregateLoadFromLastSnapshot(t *testing.T) {
 	is.Ok(t, repo.Save(r))
 	time.Sleep(500 * time.Millisecond) // wait a while, to let snapshot run first
 
-	// THEN I will assign 4 more subscriptions
+	// THEN I will call 4 more commands
 	is.Ok(t, r.Subscribe("Person#2", "A"))
 	is.Ok(t, r.Subscribe("Person#2", "B"))
 	is.Ok(t, r.Subscribe("Person#2", "C"))
@@ -263,16 +293,16 @@ func TestAggregateLoadFromLastSnapshot(t *testing.T) {
 	is.Ok(t, repo.Save(r))
 	time.Sleep(500 * time.Millisecond) // wait a while, to let snapshot run first
 
-	//THEN I load that Restaurant again
+	//THEN I load that Restaurant (r2) again
 	r2, err := repo.Load(r.Root().ID)
 	is.Ok(t, err)
 
 	// I EXPECT that last loaded aggregate from storage was
-	// called with ID=r2.ID and from version=6
+	// called with ID=r2.ID and from version=7
 	is.Equal(t, r2.Root().ID, store.LastLoadID)
 	is.Equal(t, uint64(7), store.LastLoadVersion)
 
-	//THEN I load that Restaurant again
+	//THEN I load that Restaurant (r3) again
 	a, err := repo.Load(r2.Root().ID)
 	r3 := a.(*example.Restaurant)
 
@@ -282,7 +312,7 @@ func TestAggregateLoadFromLastSnapshot(t *testing.T) {
 	is.Equal(t, r2.Root().ID, store.LastLoadID)
 	is.Equal(t, uint64(7), store.LastLoadVersion)
 
-	// THEN I will assign 4 more subscriptions
+	// THEN I will call 4 more commands
 	is.Ok(t, r3.Subscribe("Person#3", "A"))
 	is.Ok(t, r3.Subscribe("Person#4", "B"))
 	is.Ok(t, r3.Subscribe("Person#3", "B"))
@@ -299,6 +329,40 @@ func TestAggregateLoadFromLastSnapshot(t *testing.T) {
 	is.Equal(t, r4.Root().ID, store.LastLoadID)
 	is.Equal(t, uint64(7), store.LastLoadVersion)
 	is.Equal(t, uint64(11), r4.Root().Version)
+
+}
+
+func TestRepositoryCache(t *testing.T) {
+	// GIVEN Fresh Restaurant Repository with Enabled Cache
+	store := cqrs.NewMemoryStorage()
+	repo := cqrs.NewRepository(example.Factory, events.All,
+		cqrs.WithStorage(store),
+		cqrs.WithCache())
+
+	// WHEN Restaurant(r1) in version 2 is created
+	r1 := repo.Aggregate().(*example.Restaurant)
+	is.Ok(t, r1.Create("a", "b", "c", "d", "e"))
+	is.Ok(t, r1.Subscribe("dood", "meal"))
+
+	// AND Restaurant (r1) is saved in repository
+	is.Ok(t, repo.Save(r1))
+
+	// WHEN loaded from Repository as r2
+	a, err := repo.Load(r1.Root().ID)
+	is.Ok(t, err)
+	r2 := a.(*example.Restaurant)
+
+	// EXPECTS that only 'Save' was called on Storage
+	is.Equal(t, []string{"save"}, store.MethodCalls())
+
+	// EXPECTS that r1 and r2 points to the same memory address.
+	is.Equal(t, r1, r2)
+	is.True(t, r1 == r2, "")
+
+	// EXPECTS that Restaurant r2 was not loaded from Storage, but from
+	// internal state(cache) of Repository
+	is.Equal(t, uint64(0), store.LastLoadVersion)
+	is.Equal(t, "", store.LastLoadID)
 
 }
 
@@ -339,8 +403,11 @@ func benchmarkEventsStorage(commands int, b *testing.B) {
 
 func benchmarkEventsLoading(event int, b *testing.B) {
 	log.Default = log.New(log.Levels(nil, nil, os.Stderr))
-	aggregate := cqrs.NewRepository(example.Factory, events.All)
-	r := aggregate.Aggregate().(*example.Restaurant)
+	repo := cqrs.NewRepository(example.Factory, events.All,
+		cqrs.WithSnapshot(10, 500*time.Millisecond),
+		cqrs.WithCache())
+
+	r := repo.Aggregate().(*example.Restaurant)
 
 	is.Ok(b, r.Create("Restaurant", "Info", "Meal A", "Meal B"))
 	is.Ok(b, r.Schedule(time.Now().AddDate(0, 0, 1)))
@@ -348,10 +415,10 @@ func benchmarkEventsLoading(event int, b *testing.B) {
 		is.Ok(b, r.Subscribe(fmt.Sprintf("Person #%d", i), "Meal"))
 	}
 
-	is.Ok(b, aggregate.Save(r))
+	is.Ok(b, repo.Save(r))
 
 	for n := 0; n < b.N; n++ {
-		a, err := aggregate.Load(r.Root().ID)
+		a, err := repo.Load(r.Root().ID)
 		rn := a.(*example.Restaurant)
 		is.Ok(b, err)
 		is.Ok(b, rn.Subscribe("Tom", "Papu"))

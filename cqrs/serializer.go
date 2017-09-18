@@ -6,6 +6,7 @@ import (
 	//"github.com/alecthomas/binary"
 )
 
+//todo consider as global inside cqrs package
 type serializer struct {
 	object map[string]structure
 }

@@ -20,6 +20,9 @@ type Store interface {
 	// competing consumer pattern works well here).
 	Last(kind string, vFrequency uint) ([]CQRSAggregate, error)
 	Make(s Snapshot) error
+	// Snapshot returns last snapshoted version with respective data
+	// it might return (0, nil) when snapshot is not stored
+	// todo what about if aggregate not exists, at all?
 	Snapshot(aggregate string) (uint64, []byte)
 
 	//EVENT METHODS
@@ -45,14 +48,24 @@ type mem struct {
 	// test helper data
 	LastLoadID      string
 	LastLoadVersion uint64
+	calls           []string
 }
 
 func (m *mem) Make(s Snapshot) error {
+	m.calls = append(m.calls, "make")
+	log.Debug("cqrs.store.make",
+		"aggregate %s snapshot in %d version",
+		s.AggregateID[24:], s.Version)
+
 	m.snapshots[s.AggregateID] = s
 	return nil
 }
 
 func (m *mem) Last(kind string, frequency uint) ([]CQRSAggregate, error) {
+	m.calls = append(m.calls, "last")
+	log.Debug("cqrs.store.last",
+		"loading %s aggregates older than %d versions",
+		kind, frequency)
 	var o []CQRSAggregate
 	for _, a := range m.aggregates {
 		var version uint64
@@ -76,6 +89,9 @@ func (m *mem) Last(kind string, frequency uint) ([]CQRSAggregate, error) {
 }
 
 func (m *mem) Load(id string) (CQRSAggregate, error) {
+	m.calls = append(m.calls, "load")
+	log.Debug("cqrs.store.load",
+		"loading aggregate by %s ID", id[24:])
 	a, ok := m.aggregates[id]
 	if !ok {
 		return CQRSAggregate{}, fmt.Errorf("aggregate %s not found", id)
@@ -85,6 +101,10 @@ func (m *mem) Load(id string) (CQRSAggregate, error) {
 }
 
 func (m *mem) Snapshot(aggregateID string) (uint64, []byte) {
+	m.calls = append(m.calls, "snapshot")
+	log.Debug("cqrs.store.snapshot",
+		"loading aggregate %s snapshot",
+		aggregateID[24:])
 	if s, ok := m.snapshots[aggregateID]; ok {
 		return s.Version, s.Data
 	}
@@ -93,6 +113,11 @@ func (m *mem) Snapshot(aggregateID string) (uint64, []byte) {
 }
 
 func (m *mem) Save(a CQRSAggregate, es []Event) error {
+	m.calls = append(m.calls, "save")
+	log.Debug("cqrs.store.save",
+		"%s with %d events",
+		a.String(), len(es))
+
 	m.aggregates[a.ID] = a
 	for _, e := range es {
 		m.events[a.ID] = append(m.events[a.ID], event{
@@ -108,6 +133,11 @@ func (m *mem) Save(a CQRSAggregate, es []Event) error {
 }
 
 func (m *mem) Events(fromVersion uint64, id string) ([]Event, error) {
+	m.calls = append(m.calls, "events")
+	log.Debug("cqrs.store.events",
+		"loading aggregate %s events from version %d",
+		id[24:], fromVersion)
+
 	m.LastLoadID = id
 	m.LastLoadVersion = fromVersion
 
@@ -126,7 +156,7 @@ func (m *mem) Events(fromVersion uint64, id string) ([]Event, error) {
 			Version: e.version,
 			Created: time.Time{},
 		})
-		log.Debug("cqrs.store.events", "loading event %s v.%d",
+		log.Debug("cqrs.store.events", "%s v.%d event loaded",
 			e.kind, e.version)
 	}
 
@@ -149,10 +179,15 @@ func (m *mem) AggregatesEventsCount(id string) int {
 	return len(es)
 }
 
+func (m *mem) MethodCalls() []string {
+	return m.calls
+}
+
 func NewMemoryStorage() *mem {
 	return &mem{
 		aggregates: map[string]CQRSAggregate{},
 		events:     map[string][]event{},
 		snapshots:  map[string]Snapshot{},
+		calls:      []string{},
 	}
 }

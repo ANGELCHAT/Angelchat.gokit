@@ -43,7 +43,7 @@ func (p *events) changed(current Aggregate) error {
 
 		if stored.Version != version {
 			return fmt.Errorf("%s.#%s transaction failed, current version is %d, but stored is %d",
-				current.Root().Type, id[24:], stored.Version, version)
+				current.Root().Type, id[24:], version, stored.Version)
 		}
 	}
 

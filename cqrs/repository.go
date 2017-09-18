@@ -1,10 +1,6 @@
 package cqrs
 
-import (
-	"time"
-
-	"github.com/sokool/gokit/log"
-)
+import "github.com/sokool/gokit/log"
 
 type Repository struct {
 	name        string
@@ -12,6 +8,7 @@ type Repository struct {
 	opts        *Options
 	snapshotter *snapshotter
 
+	cache  *cache
 	events *events
 }
 
@@ -22,7 +19,6 @@ func (s *Repository) Aggregate() Aggregate {
 }
 
 func (s *Repository) Save(a Aggregate) error {
-
 	events, err := s.events.save(a)
 	if err != nil {
 		log.Error("cqrs.repository", err)
@@ -31,6 +27,10 @@ func (s *Repository) Save(a Aggregate) error {
 
 	log.Info("cqrs.repository", "%s saved with %d new events",
 		a.Root().String(), events)
+
+	if s.cache != nil {
+		s.cache.store(a)
+	}
 
 	// send events to listeners of aggregate
 	//if s.opts.Handlers != nil {
@@ -43,19 +43,26 @@ func (s *Repository) Save(a Aggregate) error {
 }
 
 func (s *Repository) Load(id string) (Aggregate, error) {
-	var aggregate = s.aggregateInstance()
-	var err error
 
-	a, err := s.opts.Storage.Load(id)
+	// load aggregate from cache
+	if s.cache != nil {
+		aggregate, has := s.cache.restore(id)
+		if has {
+			return aggregate, nil
+		}
+	}
+
+	stored, err := s.opts.Store.Load(id)
 	if err != nil {
 		return nil, err
 	}
 
-	aggregate.Root().init(a.ID, a.Version)
+	var aggregate = s.aggregateInstance()
+	aggregate.Root().init(stored.ID, stored.Version)
 
-	// take aggregate from last snapshot?
+	// then restore aggregate from snapshotter
 	if s.snapshotter != nil {
-		if err = s.snapshotter.Load(aggregate); err != nil {
+		if err = s.snapshotter.restore(aggregate); err != nil {
 			return nil, err
 		}
 
@@ -68,7 +75,8 @@ func (s *Repository) Load(id string) (Aggregate, error) {
 		return aggregate, err
 	}
 
-	log.Info("cqrs.repository", "%s loaded, rebuilded from beginning by processing %d events",
+	log.Info("cqrs.repository",
+		"%s reconstructed from beginning by processing %d events",
 		aggregate.Root(), events)
 
 	return aggregate, nil
@@ -81,40 +89,27 @@ func (s *Repository) aggregateInstance() Aggregate {
 	return aggregate
 }
 
-//todo return error
-func (s *Repository) Snapshotter(everyVersion uint, frequency time.Duration) {
-	if s.snapshotter != nil {
-		return
-	}
-
-	s.snapshotter = newSnapshotter(everyVersion, s.events, s.aggregateInstance)
-	timer := time.NewTicker(frequency)
-
-	go func(t *time.Ticker) {
-		log.Info("cqrs.snapshot", "starting %s snapshotter every %s and every %d version",
-			s.name, frequency, everyVersion)
-
-		//todo break that loop
-		for range t.C {
-			s.snapshotter.process()
-		}
-
-		log.Info("cqrs.snapshot", s.name)
-	}(timer)
-
-}
-
 func NewRepository(f Factory, es []interface{}, os ...Option) *Repository {
 	aggregate, _ := f()
 	options := newOptions(os...)
-
-	return &Repository{
+	r := &Repository{
 		opts:    options,
 		factory: f,
 		name:    newStructure(aggregate).Name,
 		events: &events{
-			store:      options.Storage,
+			store:      options.Store,
 			serializer: newSerializer(es...),
 		},
 	}
+
+	if options.SnapEpoch > 0 && options.SnapFrequency > 0 {
+		r.snapshotter = newSnapshotter(options.SnapEpoch, r.events, r.aggregateInstance)
+		go r.snapshotter.run(options.SnapFrequency)
+	}
+
+	if options.Cache {
+		r.cache = newCache()
+	}
+
+	return r
 }
