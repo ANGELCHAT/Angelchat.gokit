@@ -1,10 +1,9 @@
-package query
+package restaurant
 
 import (
 	"time"
 
 	"github.com/sokool/gokit/cqrs"
-	"github.com/sokool/gokit/cqrs/example/events"
 )
 
 type Tavern struct {
@@ -21,17 +20,17 @@ type Person struct {
 	Name string
 }
 
-type Query struct {
+type query struct {
 	tid     int
 	pid     int
 	taverns map[string]Tavern
 	people  map[string]Person
 }
 
-func (q *Query) Listen(a cqrs.CQRSAggregate, ce []cqrs.Event, es []interface{}) {
+func (q *query) Listen(a cqrs.CQRSAggregate, ce []cqrs.Event, es []interface{}) {
 	for _, event := range es {
 		switch e := event.(type) {
-		case *events.Created:
+		case *EventCreated:
 			if _, ok := q.taverns[a.String()]; ok {
 				break
 			}
@@ -45,7 +44,7 @@ func (q *Query) Listen(a cqrs.CQRSAggregate, ce []cqrs.Event, es []interface{}) 
 				CreatedAt: e.At,
 			}
 			q.tid++
-		case *events.MealSelected:
+		case *EventMealSelected:
 			if _, ok := q.people[e.Person]; ok {
 				break
 			}
@@ -59,16 +58,16 @@ func (q *Query) Listen(a cqrs.CQRSAggregate, ce []cqrs.Event, es []interface{}) 
 	}
 }
 
-func (q *Query) Taverns() map[string]Tavern {
+func (q *query) Taverns() map[string]Tavern {
 	return q.taverns
 }
 
-func (q *Query) People() map[string]Person {
+func (q *query) People() map[string]Person {
 	return q.people
 }
 
-func New() *Query {
-	return &Query{
+func newQuery() *query {
+	return &query{
 		taverns: map[string]Tavern{},
 		people:  map[string]Person{},
 	}

@@ -5,13 +5,13 @@ import "time"
 // todo: custom logger implementation
 // todo: custom id generator - separate for events and aggregator?
 //		 do I need id for event since I have uint Version?
-// todo: every loaded aggregate is kept in memory(cache), only generated events are stored
-// 		 it is a form of caching, memoization?
 // todo rebuild aggregate based on manually given version and/or date?
 // todo consider snapshoting on save instead seperate process
+// todo receive Command and load aggregate, dispath command store state of
+//		 todo aggregate internally.
 
 // for external use ie. another aggregate
-type HandlerFunc func(CQRSAggregate, []Event, []interface{})
+type HandlerFunc func(CQRSAggregate, []Event, []Event2)
 
 type Options struct {
 	Handlers      []HandlerFunc
@@ -30,18 +30,6 @@ func WithStorage(s Store) Option {
 	}
 }
 
-//func Logger() Option {
-//	return func(o *Options) {
-//
-//	}
-//}
-//
-//func IdentityGenerator() Option {
-//	return func(o *Options) {
-//
-//	}
-//}
-
 func WithCache() Option {
 	return func(o *Options) {
 		o.Cache = true
@@ -55,7 +43,7 @@ func WithSnapshot(epoch uint, frequency time.Duration) Option {
 	}
 }
 
-func EventHandler(fn HandlerFunc) Option {
+func WithEventHandler(fn HandlerFunc) Option {
 	return func(o *Options) {
 		if o.Handlers == nil {
 			o.Handlers = []HandlerFunc{}
@@ -64,6 +52,18 @@ func EventHandler(fn HandlerFunc) Option {
 		o.Handlers = append(o.Handlers, fn)
 	}
 }
+
+//func Logger() Option {
+//	return func(o *Options) {
+//
+//	}
+//}
+//
+//func IdentityGenerator() Option {
+//	return func(o *Options) {
+//
+//	}
+//}
 
 //func MongoStorage(url, session, collection string) Option {
 //	return func(o *Options) {

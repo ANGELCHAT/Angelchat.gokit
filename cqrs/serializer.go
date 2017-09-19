@@ -3,7 +3,6 @@ package cqrs
 import (
 	"encoding/json"
 	"fmt"
-	//"github.com/alecthomas/binary"
 )
 
 //todo consider as global inside cqrs package
@@ -43,7 +42,7 @@ func (s *serializer) Unmarshal(n string, data []byte) (interface{}, error) {
 	return v, nil
 }
 
-func newSerializer(es ...interface{}) *serializer {
+func newSerializer(es ...Event2) *serializer {
 	os := map[string]structure{}
 	for _, v := range es {
 		s := newStructure(v)

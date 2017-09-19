@@ -23,13 +23,13 @@ type Store interface {
 	// Snapshot returns last snapshoted version with respective data
 	// it might return (0, nil) when snapshot is not stored
 	// todo what about if aggregate not exists, at all?
-	Snapshot(aggregate string) (uint64, []byte)
+	Snapshot(aggregate string) (uint, []byte)
 
 	//EVENT METHODS
 	Load(id string) (CQRSAggregate, error)
 	Save(CQRSAggregate, []Event) error
 	// load all aggregates and events from given version.
-	Events(version uint64, aggregate string) ([]Event, error)
+	Events(version uint, aggregate string) ([]Event, error)
 }
 
 type event struct {
@@ -37,7 +37,7 @@ type event struct {
 	aggregate string
 	data      []byte
 	kind      string
-	version   uint64
+	version   uint
 }
 
 type mem struct {
@@ -46,9 +46,11 @@ type mem struct {
 	snapshots  map[string]Snapshot
 
 	// test helper data
-	LastLoadID      string
-	LastLoadVersion uint64
-	calls           []string
+	LastLoadID        string
+	LastLoadVersion   uint
+	LastSaveAggregate CQRSAggregate
+	LastSaveEvents    []Event
+	calls             []string
 }
 
 func (m *mem) Make(s Snapshot) error {
@@ -68,7 +70,7 @@ func (m *mem) Last(kind string, frequency uint) ([]CQRSAggregate, error) {
 		kind, frequency)
 	var o []CQRSAggregate
 	for _, a := range m.aggregates {
-		var version uint64
+		var version uint
 		if a.Type != kind {
 			continue
 		}
@@ -100,7 +102,7 @@ func (m *mem) Load(id string) (CQRSAggregate, error) {
 	return a, nil
 }
 
-func (m *mem) Snapshot(aggregateID string) (uint64, []byte) {
+func (m *mem) Snapshot(aggregateID string) (uint, []byte) {
 	m.calls = append(m.calls, "snapshot")
 	log.Debug("cqrs.store.snapshot",
 		"loading aggregate %s snapshot",
@@ -113,6 +115,9 @@ func (m *mem) Snapshot(aggregateID string) (uint64, []byte) {
 }
 
 func (m *mem) Save(a CQRSAggregate, es []Event) error {
+	m.LastSaveAggregate = a
+	m.LastSaveEvents = es
+
 	m.calls = append(m.calls, "save")
 	log.Debug("cqrs.store.save",
 		"%s with %d events",
@@ -132,7 +137,7 @@ func (m *mem) Save(a CQRSAggregate, es []Event) error {
 	return nil
 }
 
-func (m *mem) Events(fromVersion uint64, id string) ([]Event, error) {
+func (m *mem) Events(fromVersion uint, id string) ([]Event, error) {
 	m.calls = append(m.calls, "events")
 	log.Debug("cqrs.store.events",
 		"loading aggregate %s events from version %d",
@@ -156,8 +161,8 @@ func (m *mem) Events(fromVersion uint64, id string) ([]Event, error) {
 			Version: e.version,
 			Created: time.Time{},
 		})
-		log.Debug("cqrs.store.events", "%s v.%d event loaded",
-			e.kind, e.version)
+		//log.Debug("cqrs.store.events", "%s v.%d event loaded",
+		//	e.kind, e.version)
 	}
 
 	return events, nil

@@ -9,18 +9,79 @@ import (
 	"github.com/sokool/gokit/log"
 )
 
-type Aggregate interface {
-	Root() *Root
-	Set(*Root)
+type Command interface{}
 
-	// todo separate interface Snapshooter? consider as event?
-	TakeSnapshot() interface{}
-	RestoreSnapshot(interface{}) error
+type Event2 interface{}
+
+type Aggregate struct {
+	ID       string
+	Name     string
+	Version  uint
+	Commands map[Command]CommandHandler
+	Events   map[Event2]EventHandler
+
+	RestoreSnapshot func(v interface{}) error
+	TakeSnapshot    func() interface{}
+
+	events []Event2
 }
 
-type Factory func() (Aggregate, DataHandler)
+func (a *Aggregate) String() string {
+	return fmt.Sprintf("%s.#%s.v%d", a.Name, a.ID[24:], a.Version)
+}
 
-type DataHandler func(e interface{}) error
+func (a *Aggregate) dispatch(c Command) error {
+	name := reflect.TypeOf(c).String()
+	for v, handler := range a.Commands {
+		if name == reflect.TypeOf(v).String() {
+			events, err := handler(c)
+			if err != nil {
+				return err
+			}
+
+			a.events = append(a.events, events...)
+
+			return nil
+		}
+	}
+
+	return fmt.Errorf("command handler for %s not exists", name)
+}
+
+func (a *Aggregate) apply(e Event2) {
+	name := reflect.TypeOf(e).String()
+	for v, handler := range a.Events {
+		if handler == nil {
+			continue
+		}
+
+		if name == reflect.TypeOf(v).String() {
+
+			if err := handler(e); err != nil {
+				log.Info("cqrs.event.handle", err.Error())
+			} else {
+				log.Info("cqrs.event.handled", "%s:%+v", name, e)
+			}
+
+			return
+		}
+	}
+
+	log.Info("cqrs.event.dispatch",
+		"event handler for %s not registered in cqrs.Aggregate",
+		name)
+
+}
+
+type FactoryFunc func(string, uint) *Aggregate
+
+type CommandHandler func(Command) ([]Event2, error)
+
+type EventHandler func(Event2) error
+
+//
+//
+//
 
 func generateID() string {
 	return uuid.New().String()
@@ -44,11 +105,12 @@ func newStructure(v interface{}) structure {
 	return structure{t.Name(), t}
 }
 
+//todo aggregate{ID, Name}?
 type Event struct {
 	ID      string
 	Type    string
 	Data    []byte
-	Version uint64
+	Version uint
 	Created time.Time
 }
 
@@ -57,47 +119,11 @@ func (e Event) String() string {
 		e.ID[24:], e.Version, e.Type, e.Data)
 }
 
-//todo Root == CQRSAggregate???
-type Root struct {
-	ID      string
-	Version uint64
-	Type    string
-	events  []interface{}
-	handler func(interface{}) error
-}
-
-func (a *Root) init(id string, version uint64) {
-	a.ID = id
-	a.Version = version
-	a.events = []interface{}{}
-}
-
-func (a *Root) Apply(e interface{}) error {
-	if err := a.handler(e); err != nil {
-		log.Error("tavern.event.handling", err)
-		return err
-	}
-	a.events = append(a.events, e)
-	return nil
-}
-
-func (a *Root) String() string {
-	return fmt.Sprintf("%s.#%s.v%d", a.Type, a.ID[24:], a.Version)
-}
-
-func newRoot(h DataHandler, name string) *Root {
-	return &Root{
-		Type:    name,
-		events:  []interface{}{},
-		handler: h,
-	}
-}
-
 //todo maybe interface?
 type CQRSAggregate struct {
 	ID      string
 	Type    string
-	Version uint64
+	Version uint
 }
 
 func (a *CQRSAggregate) String() string {
@@ -108,5 +134,5 @@ func (a *CQRSAggregate) String() string {
 type Snapshot struct {
 	AggregateID string
 	Data        []byte
-	Version     uint64
+	Version     uint
 }
