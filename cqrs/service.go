@@ -11,6 +11,7 @@ type Service struct {
 	opts        *Options
 	snapshotter *snapshotter
 
+	l      *locker
 	cache  *cache
 	events *events
 }
@@ -24,6 +25,13 @@ func (s *Service) Send(c Command, aggregate ...string) (string, error) {
 	// check if aggregate ID is given
 	if len(aggregate) > 0 {
 		id = aggregate[0]
+	}
+
+	// only one command can change aggregate state.
+	// changing state per aggregate is transactional
+	if len(id) > 0 {
+		s.l.Lock(id)
+		defer s.l.Unlock(id)
 	}
 
 	// load aggregate from cache
@@ -117,6 +125,7 @@ func NewService(f FactoryFunc, os ...Option) *Service {
 	}
 
 	r := &Service{
+		l:       newLocker(),
 		opts:    options,
 		factory: f,
 		events: &events{

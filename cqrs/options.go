@@ -5,10 +5,10 @@ import "time"
 // todo: custom logger implementation
 // todo: custom id generator - separate for events and aggregator?
 //		 do I need id for event since I have uint Version?
-// todo rebuild aggregate based on manually given version and/or date?
-// todo consider snapshoting on save instead seperate process
-// todo receive Command and load aggregate, dispath command store state of
-//		 todo aggregate internally.
+// todo projection: rebuild aggregate based on manually given version and/or date?
+// todo consider snapshoting on save instead separate process
+// todo lock command dispatching based on aggregate id.
+// todo send multiple commands
 
 // for external use ie. another aggregate
 type HandlerFunc func(CQRSAggregate, []Event, []Event2)

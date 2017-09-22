@@ -5,6 +5,8 @@ import (
 	"reflect"
 	"time"
 
+	"sync"
+
 	"github.com/google/uuid"
 	"github.com/sokool/gokit/log"
 )
@@ -135,4 +137,46 @@ type Snapshot struct {
 	AggregateID string
 	Data        []byte
 	Version     uint
+}
+
+type locker struct {
+	mutex  sync.RWMutex
+	access map[string]*sync.Mutex
+}
+
+func (l *locker) locker(key string) *sync.Mutex {
+	l.mutex.RLock()
+	if lock, ok := l.access[key]; ok {
+		l.mutex.RUnlock()
+		return lock
+	}
+
+	l.mutex.RUnlock()
+	l.mutex.Lock()
+
+	if lock, ok := l.access[key]; ok {
+		l.mutex.Unlock()
+		return lock
+	}
+
+	lock := &sync.Mutex{}
+	l.access[key] = lock
+	l.mutex.Unlock()
+
+	return lock
+}
+
+func (l *locker) Lock(key string) {
+	l.locker(key).Lock()
+}
+
+func (l *locker) Unlock(key string) {
+	l.locker(key).Unlock()
+}
+
+func newLocker() *locker {
+	return &locker{
+		mutex:  sync.RWMutex{},
+		access: map[string]*sync.Mutex{},
+	}
 }

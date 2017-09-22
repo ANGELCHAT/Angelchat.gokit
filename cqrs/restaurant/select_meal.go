@@ -6,12 +6,18 @@ import (
 	"time"
 
 	"github.com/sokool/gokit/cqrs"
+	"github.com/sokool/gokit/log"
 )
 
 //COMMAND
 type SelectMeal struct {
-	Person string
-	Meal   string
+	Person  string
+	Meal    string
+	HowLong time.Duration
+}
+
+func (s SelectMeal) String() string {
+	return fmt.Sprintf("%s:%s |%s", s.Person, s.Meal, s.HowLong)
 }
 
 //EVENT
@@ -39,6 +45,11 @@ func selectMeal(r *Restaurant) cqrs.CommandHandler {
 
 		if !r.Canceled.IsZero() {
 			return es, fmt.Errorf("%s subscriptions has been canceled", r.Name)
+		}
+
+		if c.HowLong > time.Duration(0) {
+			log.Info("restaurant.select-meal", "%s: %s", r.ID, c.String())
+			time.Sleep(c.HowLong)
 		}
 
 		s, ok := r.Subscriptions[c.Person]
