@@ -54,6 +54,7 @@ func (p *events) changed(current *Aggregate) error {
 // Clear Aggregate events buffer
 func (p *events) save(a *Aggregate) (int, error) {
 	var events []Event
+	var date = time.Now()
 	var version = a.Version
 	var id = a.ID
 
@@ -75,7 +76,7 @@ func (p *events) save(a *Aggregate) (int, error) {
 			ID:      generateID(),
 			Type:    name,
 			Data:    data,
-			Created: time.Now(),
+			Created: date, // each event in transaction get the same date
 			Version: version,
 		})
 
