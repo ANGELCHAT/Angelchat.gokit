@@ -5,6 +5,8 @@ import (
 
 	"time"
 
+	"sync"
+
 	"github.com/sokool/gokit/log"
 )
 
@@ -41,6 +43,8 @@ type event struct {
 }
 
 type mem struct {
+	mu *sync.Mutex
+
 	aggregates map[string]CQRSAggregate
 	events     map[string][]event
 	snapshots  map[string]Snapshot
@@ -54,6 +58,9 @@ type mem struct {
 }
 
 func (m *mem) Make(s Snapshot) error {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+
 	m.calls = append(m.calls, "make")
 	log.Debug("cqrs.store.make",
 		"aggregate %s snapshot in %d version",
@@ -64,6 +71,9 @@ func (m *mem) Make(s Snapshot) error {
 }
 
 func (m *mem) Last(kind string, frequency uint) ([]CQRSAggregate, error) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+
 	m.calls = append(m.calls, "last")
 	log.Debug("cqrs.store.last",
 		"loading %s aggregates older than %d versions",
@@ -91,6 +101,9 @@ func (m *mem) Last(kind string, frequency uint) ([]CQRSAggregate, error) {
 }
 
 func (m *mem) Load(id string) (CQRSAggregate, error) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+
 	m.calls = append(m.calls, "load")
 	log.Debug("cqrs.store.load",
 		"loading aggregate by %s ID", id[24:])
@@ -103,6 +116,9 @@ func (m *mem) Load(id string) (CQRSAggregate, error) {
 }
 
 func (m *mem) Snapshot(aggregateID string) (uint, []byte) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+
 	m.calls = append(m.calls, "snapshot")
 	log.Debug("cqrs.store.snapshot",
 		"loading aggregate %s snapshot",
@@ -115,6 +131,9 @@ func (m *mem) Snapshot(aggregateID string) (uint, []byte) {
 }
 
 func (m *mem) Save(a CQRSAggregate, es []Event) error {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+
 	m.LastSaveAggregate = a
 	m.LastSaveEvents = es
 
@@ -125,19 +144,24 @@ func (m *mem) Save(a CQRSAggregate, es []Event) error {
 
 	m.aggregates[a.ID] = a
 	for _, e := range es {
-		m.events[a.ID] = append(m.events[a.ID], event{
+		ev := event{
 			id:        e.ID,
 			aggregate: a.ID,
 			version:   e.Version,
 			data:      e.Data,
 			kind:      e.Type,
-		})
+		}
+
+		m.events[a.ID] = append(m.events[a.ID], ev)
 	}
 
 	return nil
 }
 
 func (m *mem) Events(fromVersion uint, id string) ([]Event, error) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+
 	m.calls = append(m.calls, "events")
 	log.Debug("cqrs.store.events",
 		"loading aggregate %s events from version %d",
@@ -176,6 +200,7 @@ func (m *mem) AggregatesCount() int {
 }
 
 func (m *mem) AggregatesEventsCount(id string) int {
+
 	es, ok := m.events[id]
 	if !ok {
 		return 0
@@ -190,6 +215,7 @@ func (m *mem) MethodCalls() []string {
 
 func NewMemoryStorage() *mem {
 	return &mem{
+		mu:         &sync.Mutex{},
 		aggregates: map[string]CQRSAggregate{},
 		events:     map[string][]event{},
 		snapshots:  map[string]Snapshot{},
