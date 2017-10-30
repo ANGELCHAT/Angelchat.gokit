@@ -7,6 +7,14 @@ type Key struct {
 	access map[string]*sync.Mutex
 }
 
+func (l *Key) Lock(key string) {
+	l.locker(key).Lock()
+}
+
+func (l *Key) Unlock(key string) {
+	l.locker(key).Unlock()
+}
+
 func (l *Key) locker(key string) *sync.Mutex {
 	l.mutex.RLock()
 	if lock, ok := l.access[key]; ok {
@@ -27,14 +35,6 @@ func (l *Key) locker(key string) *sync.Mutex {
 	l.mutex.Unlock()
 
 	return lock
-}
-
-func (l *Key) Lock(key string) {
-	l.locker(key).Lock()
-}
-
-func (l *Key) Unlock(key string) {
-	l.locker(key).Unlock()
 }
 
 func NewKey() *Key {

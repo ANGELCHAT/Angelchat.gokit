@@ -22,7 +22,7 @@ type EventCreated struct {
 }
 
 func CreateHandler(r *Restaurant) cqrs.CommandHandler {
-	return func(v cqrs.Command) ([]cqrs.Event2, error) {
+	return func(v cqrs.Command) ([]interface{}, error) {
 		c, ok := v.(*Create)
 		if !ok {
 			return nil, fmt.Errorf("wrong %s command type", reflect.TypeOf(v))
@@ -32,7 +32,7 @@ func CreateHandler(r *Restaurant) cqrs.CommandHandler {
 			return nil, fmt.Errorf("restaurant %s is already created", r.Name)
 		}
 
-		es := []cqrs.Event2{
+		es := []interface{}{
 			&EventCreated{
 				Restaurant: c.Name,
 				Info:       c.Info,

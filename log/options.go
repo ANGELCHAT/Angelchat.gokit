@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"io"
 	"strings"
+	"time"
 )
 
 type FormatterFunc func(Message) string
@@ -42,7 +43,11 @@ func Formatter(f FormatterFunc) Option {
 func MessageFormat(colors bool) Option {
 	return func(o *Options) {
 		o.Formatter = func(m Message) string {
-			message := fmt.Sprintf("%s: %s", m.Tag, fmt.Sprintf(m.Text, m.Args...))
+			message := fmt.Sprintf("%s %s: %s",
+				time.Now().Format("2006-01-02 15:04:05.000000"),
+				m.Tag,
+				fmt.Sprintf(m.Text, m.Args...))
+
 			if len(strings.TrimSpace(m.Tag)) == 0 {
 				message = message[len(m.Tag)+2:]
 			}

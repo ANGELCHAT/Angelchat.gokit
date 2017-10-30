@@ -2,82 +2,14 @@ package cqrs
 
 import (
 	"fmt"
-	"reflect"
 	"time"
-
-	"sync"
-
-	"github.com/google/uuid"
-	"github.com/sokool/gokit/log"
 )
 
 type Command interface{}
 
 type Event2 interface{}
 
-type Aggregate struct {
-	ID       string
-	Name     string
-	Version  uint
-	Commands map[Command]CommandHandler
-	Events   map[Event2]EventHandler
-
-	RestoreSnapshot func(v interface{}) error
-	TakeSnapshot    func() interface{}
-
-	events []Event2
-}
-
-func (a *Aggregate) String() string {
-	return fmt.Sprintf("%s.#%s.v%d", a.Name, a.ID[24:], a.Version)
-}
-
-func (a *Aggregate) dispatch(c Command) error {
-	name := reflect.TypeOf(c).String()
-	for v, handler := range a.Commands {
-		if name == reflect.TypeOf(v).String() {
-			events, err := handler(c)
-			if err != nil {
-				return err
-			}
-
-			a.events = append(a.events, events...)
-
-			return nil
-		}
-	}
-
-	return fmt.Errorf("command handler for %s not exists", name)
-}
-
-func (a *Aggregate) apply(e Event2) {
-	name := reflect.TypeOf(e).String()
-	for v, handler := range a.Events {
-		if handler == nil {
-			continue
-		}
-
-		if name == reflect.TypeOf(v).String() {
-
-			if err := handler(e); err != nil {
-				log.Info("cqrs.event.handle", err.Error())
-			} else {
-				log.Info("cqrs.event.handled", "%s:%+v", name, e)
-			}
-
-			return
-		}
-	}
-
-	log.Info("cqrs.event.dispatch",
-		"event handler for %s not registered in cqrs.Aggregate",
-		name)
-
-}
-
-type FactoryFunc func(string, uint) *Aggregate
-
-type CommandHandler func(Command) ([]Event2, error)
+type CommandHandler func(Command) ([]interface{}, error)
 
 type EventHandler func(Event2) error
 
@@ -85,29 +17,30 @@ type EventHandler func(Event2) error
 //
 //
 
-func generateID() string {
-	return uuid.New().String()
-}
-
-type structure struct {
-	Name string
-	Type reflect.Type
-}
-
-func (i structure) Instance() interface{} {
-	return reflect.New(i.Type).Interface()
-}
-
-func newStructure(v interface{}) structure {
-	t := reflect.TypeOf(v)
-	if t.Kind() == reflect.Ptr {
-		t = t.Elem()
-	}
-
-	return structure{t.Name(), t}
-}
+//func generateID() string {
+//	return uuid.New().String()
+//}
+//
+//type structure struct {
+//	Name string
+//	Type reflect.Type
+//}
+//
+//func (i structure) Instance() interface{} {
+//	return reflect.New(i.Type).Interface()
+//}
+//
+//func newStructure(v interface{}) structure {
+//	t := reflect.TypeOf(v)
+//	if t.Kind() == reflect.Ptr {
+//		t = t.Elem()
+//	}
+//
+//	return structure{t.Name(), t}
+//}
 
 //todo aggregate{ID, Name}?
+//todo it belongs to EVENT STORE!
 type Event struct {
 	ID      string
 	Type    string
@@ -137,46 +70,4 @@ type Snapshot struct {
 	AggregateID string
 	Data        []byte
 	Version     uint
-}
-
-type locker struct {
-	mutex  sync.RWMutex
-	access map[string]*sync.Mutex
-}
-
-func (l *locker) locker(key string) *sync.Mutex {
-	l.mutex.RLock()
-	if lock, ok := l.access[key]; ok {
-		l.mutex.RUnlock()
-		return lock
-	}
-
-	l.mutex.RUnlock()
-	l.mutex.Lock()
-
-	if lock, ok := l.access[key]; ok {
-		l.mutex.Unlock()
-		return lock
-	}
-
-	lock := &sync.Mutex{}
-	l.access[key] = lock
-	l.mutex.Unlock()
-
-	return lock
-}
-
-func (l *locker) Lock(key string) {
-	l.locker(key).Lock()
-}
-
-func (l *locker) Unlock(key string) {
-	l.locker(key).Unlock()
-}
-
-func newLocker() *locker {
-	return &locker{
-		mutex:  sync.RWMutex{},
-		access: map[string]*sync.Mutex{},
-	}
 }

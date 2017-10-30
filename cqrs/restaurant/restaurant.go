@@ -34,40 +34,17 @@ type Restaurant struct {
 	Canceled  time.Time
 }
 
-type Snapshot struct {
-	Version uint
-
-	Name string
-	Info string
-	Menu []string
-
-	Subscriptions map[string]subscription
-
-	Created   time.Time
-	Scheduled time.Time
-	Canceled  time.Time
-}
-
 func (a *Restaurant) String() string {
 	b, _ := json.Marshal(a)
 	return string(b)
 }
 
 func (a *Restaurant) TakeSnapshot() interface{} {
-	return Snapshot{
-		Version:       1,
-		Name:          a.Name,
-		Info:          a.Info,
-		Menu:          a.Menu,
-		Subscriptions: a.Subscriptions,
-		Created:       a.Created,
-		Scheduled:     a.Scheduled,
-		Canceled:      a.Canceled,
-	}
+	return a
 }
 
 func (a *Restaurant) RestoreSnapshot(v interface{}) error {
-	s, ok := v.(*Snapshot)
+	s, ok := v.(*Restaurant)
 	if !ok {
 		return fmt.Errorf("wront snapshot type[%s] in %s",
 			reflect.TypeOf(s).String(),
@@ -87,7 +64,7 @@ func (a *Restaurant) RestoreSnapshot(v interface{}) error {
 
 func Factory() cqrs.FactoryFunc {
 	return func(id string, version uint) *cqrs.Aggregate {
-		r := &Restaurant{ID: id, Version: version}
+		r := &Restaurant{Subscriptions: make(map[string]subscription)}
 		R = r
 		Last = &cqrs.Aggregate{
 			Name:    "restaurant",
@@ -100,7 +77,7 @@ func Factory() cqrs.FactoryFunc {
 				&Schedule{}:   schedule(r),
 				&Reschedule{}: reschedule(r),
 			},
-			Events: map[cqrs.Event2]cqrs.EventHandler{
+			Events: map[interface{}]cqrs.EventHandler{
 				&EventCreated{}:      created(r),
 				&EventMealSelected{}: mealSelected(r),
 				&EventMealChanged{}:  mealChanged(r),
@@ -116,10 +93,10 @@ func Factory() cqrs.FactoryFunc {
 	}
 }
 
-//var service = cqrs.NewService(
+//var service = cqrs.NewEventSourced(
 //	Factory,
 //	cqrs.WithCache(),
 //	cqrs.WithSnapshot(50, 10*time.Second),
 //	cqrs.WithEventHandler(Query.Listen),
-//	cqrs.WithStorage(cqrs.NewMemoryStorage()),
+//	cqrs.WithEventStore(cqrs.NewMemoryStorage()),
 //)

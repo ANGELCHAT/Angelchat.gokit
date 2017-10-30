@@ -7,15 +7,16 @@ import "time"
 //		 do I need id for event since I have uint Version?
 // todo projection: rebuild aggregate based on manually given version and/or date?
 // todo consider snapshoting on save instead separate process
-// todo lock command dispatching based on aggregate id.
 // todo send multiple commands
+// todo cleanup Service.Send
 
 // for external use ie. another aggregate
 type HandlerFunc func(CQRSAggregate, []Event, []Event2)
 
+type InternalHandler func([]Event2)
+
 type Options struct {
 	Handlers      []HandlerFunc
-	Store         Store
 	Name          string
 	SnapEpoch     uint
 	SnapFrequency time.Duration
@@ -23,12 +24,6 @@ type Options struct {
 }
 
 type Option func(*Options)
-
-func WithStorage(s Store) Option {
-	return func(o *Options) {
-		o.Store = s
-	}
-}
 
 func WithCache() Option {
 	return func(o *Options) {
@@ -79,7 +74,7 @@ func WithEventHandler(fn HandlerFunc) Option {
 //			os.Exit(-1)
 //		}
 //
-//		o.WithStorage = mongoStore(db, collection)
+//		o.WithEventStore = mongoStore(db, collection)
 //	}
 //}
 
@@ -90,9 +85,9 @@ func newOptions(ops ...Option) *Options {
 		o(s)
 	}
 
-	if s.Store == nil {
-		s.Store = NewMemoryStorage()
-	}
+	//if s.Append == nil {
+	//	s.Append = NewMemoryStorage()
+	//}
 
 	return s
 

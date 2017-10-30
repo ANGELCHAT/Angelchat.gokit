@@ -35,8 +35,8 @@ const (
 	tag
 )
 
-var Default *Logger = New(
-	Levels(os.Stdout, os.Stdout, os.Stderr),
+var Default = New(
+	Levels(os.Stdout, nil, os.Stdout),
 )
 
 func (l *Logger) Info(tag, msg string, args ...interface{}) {
@@ -50,6 +50,9 @@ func (l *Logger) Info(tag, msg string, args ...interface{}) {
 }
 
 func (l *Logger) Debug(tag, msg string, args ...interface{}) {
+	if l.opt.Debug == nil {
+		return
+	}
 	l.write(l.opt.Debug, Message{
 		tag,
 		msg,
@@ -113,4 +116,9 @@ func Debug(tag, msg string, args ...interface{}) {
 
 func Error(tag string, e error) {
 	Default.Error(tag, e)
+}
+
+func Fatal(tag string, e error) {
+	Default.Error(tag, e)
+	os.Exit(-1)
 }

@@ -14,7 +14,7 @@ type EventScheduled struct{ On time.Time }
 type EventRescheduled struct{ On time.Time }
 
 func reschedule(r *Restaurant) cqrs.CommandHandler {
-	return func(v cqrs.Command) ([]cqrs.Event2, error) {
+	return func(v cqrs.Command) ([]interface{}, error) {
 		c, ok := v.(*Reschedule)
 		if !ok {
 			return nil, fmt.Errorf("wrong %s command type", reflect.TypeOf(v))
@@ -24,12 +24,12 @@ func reschedule(r *Restaurant) cqrs.CommandHandler {
 			return nil, fmt.Errorf("%s is canceled", r.Name)
 		}
 
-		return []cqrs.Event2{&EventRescheduled{On: c.On}}, nil
+		return []interface{}{&EventRescheduled{On: c.On}}, nil
 	}
 }
 
 func schedule(r *Restaurant) cqrs.CommandHandler {
-	return func(v cqrs.Command) ([]cqrs.Event2, error) {
+	return func(v cqrs.Command) ([]interface{}, error) {
 		c, ok := v.(*Schedule)
 		if !ok {
 			return nil, fmt.Errorf("wrong %s command type", reflect.TypeOf(v))
@@ -49,7 +49,7 @@ func schedule(r *Restaurant) cqrs.CommandHandler {
 				r.Name, r.Scheduled.Format("2006-01-02"))
 		}
 
-		return []cqrs.Event2{&EventScheduled{On: c.On}}, nil
+		return []interface{}{&EventScheduled{On: c.On}}, nil
 	}
 }
 

@@ -18,7 +18,7 @@ type EventCanceled struct {
 type Cancel struct{}
 
 func cancel(r *Restaurant) cqrs.CommandHandler {
-	return func(v cqrs.Command) ([]cqrs.Event2, error) {
+	return func(v cqrs.Command) ([]interface{}, error) {
 		_, ok := v.(*Cancel)
 		if !ok {
 			return nil, fmt.Errorf("wrong %s command type", reflect.TypeOf(v))
@@ -38,7 +38,7 @@ func cancel(r *Restaurant) cqrs.CommandHandler {
 			people = append(people, p.Person)
 		}
 
-		events := []cqrs.Event2{
+		events := []interface{}{
 			&EventCanceled{
 				Restaurant: r.Name,
 				People:     people,

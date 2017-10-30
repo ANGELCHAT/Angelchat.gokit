@@ -36,8 +36,8 @@ type EventMealChanged struct {
 }
 
 func selectMeal(r *Restaurant) cqrs.CommandHandler {
-	return func(v cqrs.Command) ([]cqrs.Event2, error) {
-		var es []cqrs.Event2
+	return func(v cqrs.Command) ([]interface{}, error) {
+		var es []interface{}
 		c, ok := v.(*SelectMeal)
 		if !ok {
 			return es, fmt.Errorf("wrong %s command type", reflect.TypeOf(v))

@@ -164,7 +164,7 @@ func Logging() Wrapper {
 				log.Debug("HTTP.response.status", "%v", res.Status)
 				log.Debug("HTTP.response.headers", "%v", res.Header)
 				log.Debug("HTTP.response.size", "%.2fKB", float64(len(o))/1024)
-				//log.Debug("HTTP.response.body", "%s", string(o))
+				log.Debug("HTTP.response.body", "%s", string(o))
 			}
 
 			return res, err
@@ -211,7 +211,7 @@ func Trace(fn func(TraceInfo)) Wrapper {
 			res, err := e.Do(r)
 
 			if err != nil {
-				log.Error("HTTP.trace.error", "%s", err.Error())
+				log.Error("HTTP.trace.error", err)
 				return res, err
 			}
 
