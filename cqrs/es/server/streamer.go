@@ -10,15 +10,23 @@ import (
 type streamer struct {
 	store    *es.Service
 	response chan []byte
+	closed   bool
+	z int
 }
+
 
 func (s *streamer) Transmit() <-chan Data {
 	out := make(chan Data, 1)
 	go func() {
 		defer close(out)
 		for data := range s.response {
+			//if s.z > 3 {
+			//	//log.Info("zamykam się", "")
+			//	break
+			//}
 			log.Debug("es.server.streamer", "transmit response")
 			out <- Data{Bytes: data, Error: nil}
+			//s.z++
 		}
 	}()
 
@@ -42,8 +50,11 @@ func (s *streamer) Receive(in []byte) error {
 }
 
 func (s *streamer) Close() error {
+	if s.closed {
+		return nil
+	}
 	close(s.response)
-
+	s.closed = true
 	return nil
 }
 

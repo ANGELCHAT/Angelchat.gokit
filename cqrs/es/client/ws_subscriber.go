@@ -22,8 +22,9 @@ type message struct {
 
 func (r *Subscriber) Read(f func([]Event)) {
 	defer func() {
-		r.conn.Close()
-		log.Info("es.client.reader", "disconnected")
+		log.Info("es.client.subscriber", "disconnected")
+		//r.conn.Close()
+
 	}()
 
 	m := message{
@@ -38,11 +39,11 @@ func (r *Subscriber) Read(f func([]Event)) {
 	for {
 		events := new([]Event)
 		err := r.conn.ReadJSON(events)
-		if websocket.IsCloseError(err, websocket.CloseNormalClosure) {
-			log.Debug("es.client.subscriber", "close message received")
+		if websocket.IsCloseError(err, websocket.CloseGoingAway, websocket.CloseNormalClosure) {
+			log.Info("es.client.subscriber", "%s", err.Error())
 			return
 		} else if err != nil {
-			log.Error("es.client.reader", err)
+			log.Error("es.client.subscriber", err)
 			break
 		}
 

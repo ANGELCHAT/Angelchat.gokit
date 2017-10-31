@@ -40,18 +40,24 @@ func (w *Writer) Write(streamID string, meta map[string]string, events ...interf
 		Meta:   b,
 		Events: es,
 	}
-	//0,48ms
-	if err := w.conn.WriteJSON(s); err != nil {
+
+	err = w.conn.WriteJSON(s)
+	if websocket.IsCloseError(err, websocket.CloseGoingAway, websocket.CloseNormalClosure) {
+		log.Info("es.client.writer", "%s", err.Error())
+		return nil
+	} else if err != nil {
+		log.Error("es.client.writer", err)
 		return err
 	}
 	//0,2ms
-	//log.Info("es.client.writer", "after send")
-	//_, m, err := w.conn.ReadMessage()
-	//if err != nil {
-	//	return err
-	//}
+	log.Info("es.client.writer", "after send")
+	_, m, err := w.conn.ReadMessage()
+	if err != nil {
+		w.conn.Close()
+		return err
+	}
 
-	//log.Info("es.client.writer", "received %s", string(m))
+	log.Info("es.client.writer", "received %s", string(m))
 	return nil
 }
 

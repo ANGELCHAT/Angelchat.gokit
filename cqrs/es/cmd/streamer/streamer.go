@@ -57,14 +57,11 @@ func main() {
 		SubscribedEvent{"Franek"},
 	}
 
-	for range time.NewTicker(1500 * time.Millisecond).C {
+	for range time.NewTicker(3500 * time.Millisecond).C {
 		log.Debug("cmd.client.writer", "sending...")
 		if err := writer.Write(streamID, metaData, events...); err != nil {
 			log.Fatal("cmd.client.writer", fmt.Errorf("sending events to %s", err.Error()))
 		}
 	}
-
-	time.Sleep(time.Second * 3)
-	log.Debug("cmd.client.writer", "exit")
 
 }

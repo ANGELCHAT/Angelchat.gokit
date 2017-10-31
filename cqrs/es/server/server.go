@@ -1,12 +1,12 @@
 package server
 
 import (
-	"context"
 	"net/http"
 
-	"time"
-
 	"fmt"
+
+	"context"
+	"time"
 
 	"sync"
 
@@ -15,182 +15,91 @@ import (
 	"github.com/sokool/gokit/log"
 )
 
+var tag = fmt.Sprintf("es.server")
+
 type Server struct {
-	sync.Mutex
 	http *http.Server
 	opts *options
-	//todo thread safe map?
-	connections map[string]*websocket.Conn
-	done        chan struct{}
+	//
+	done chan struct{}
+	// hold all registered actions
+	actions sync.Map
 }
 
 func (s *Server) serve(f func(*es.Service) TransmitReceiver) http.HandlerFunc {
 	return func(res http.ResponseWriter, req *http.Request) {
-		tr := f(s.opts.eventStore)
-		tag := fmt.Sprintf("es.server")
-		wsc, err := websocket.Upgrade(res, req, nil, 1024, 1024)
+
+		ws, err := websocket.Upgrade(res, req, nil, 1024, 1024)
 		if err != nil {
 			log.Error(tag, fmt.Errorf("websocket handshake %s", err))
 			return
 		}
-		//done := make(chan struct{})
 
-		s.Lock()
-		s.connections[req.RemoteAddr] = wsc
-		s.Unlock()
+		log.Info(tag, "%s connected", req.RemoteAddr)
 
-		go func() { // read from handler(blocks) and write to peer
-			defer func() {
-				log.Debug(tag, "writing to peer done")
-			}()
-			for d := range tr.Transmit() {
-				log.Info(tag, "writing to peer")
-				if d.Error != nil {
-					log.Error(tag, fmt.Errorf("reading from handler: %s", d.Error.Error()))
-					continue
-				}
+		action := newAction(ws)
 
-				err = wsc.WriteMessage(websocket.TextMessage, d.Bytes)
-				if websocket.IsCloseError(err, websocket.CloseNormalClosure) { // it's ok
-					return
-				} else if err != nil {
-					log.Error(tag, fmt.Errorf("writing to peer %s", err.Error()))
-					return
-				}
-			}
-		}()
+		s.actions.Store(action, true)
+		action.do(f(s.opts.eventStore))
+		s.actions.Delete(action)
 
-		for {
-			_, b, err := wsc.ReadMessage()
-			log.Info(tag, "read from peer", "%s", string(b))
-			if websocket.IsCloseError(err, websocket.CloseNormalClosure) { // it's ok
-				break
-			} else if err != nil { // unexpected error
-				log.Error(tag, fmt.Errorf("reading from peer %s", err.Error()))
-				break
-			}
+		log.Info(tag, "%s disconnected", req.RemoteAddr)
 
-			if err := tr.Receive(b); err != nil {
-				log.Error(tag, fmt.Errorf("writing to handler %s", err.Error()))
-			}
+		var length int
+		s.actions.Range(func(_, _ interface{}) bool {
+			length++
+			return true
+		})
+
+		if length == 0 {
+			close(s.done)
 		}
-
-		wsc.Close()
-		log.Debug(tag, "connection closed")
 	}
-}
-
-func (s *Server) serve2(f func(*es.Service) TransmitReceiver) http.HandlerFunc {
-	return func(res http.ResponseWriter, req *http.Request) {
-		tr := f(s.opts.eventStore)
-		done := make(chan struct{})
-		tag := fmt.Sprintf("es.server")
-		wsc, err := websocket.Upgrade(res, req, nil, 1024, 1024)
-		if err != nil {
-			log.Error(tag, fmt.Errorf("websocket handshake %s", err))
-			return
-		}
-		s.Lock()
-		s.connections[req.RemoteAddr] = wsc
-		s.Unlock()
-		go func() { // read from handler(blocks) and write to peer
-			defer func() {
-				log.Debug(tag, "writing to peer done")
-				done <- struct{}{}
-			}()
-			for d := range tr.Transmit() {
-				if d.Error != nil {
-					log.Error(tag, fmt.Errorf("reading from handler: %s", d.Error.Error()))
-					continue
-				}
-
-				err = wsc.WriteMessage(websocket.TextMessage, d.Bytes)
-				if websocket.IsCloseError(err, websocket.CloseNormalClosure) { // it's ok
-					return
-				} else if err != nil {
-					log.Error(tag, fmt.Errorf("writing to peer %s", err.Error()))
-					return
-				}
-			}
-		}()
-
-		go func() { // read from peer (blocks) and write to handler
-			defer func() {
-				log.Debug(tag, "reading from peer done")
-				done <- struct{}{}
-			}()
-			for {
-				_, b, err := wsc.ReadMessage()
-				log.Info("read from peer", "")
-				if websocket.IsCloseError(err, websocket.CloseNormalClosure) { // it's ok
-					return
-				} else if err != nil { // unexpected error
-					log.Error(tag, fmt.Errorf("reading from peer %s", err.Error()))
-					return
-				}
-
-				if err := tr.Receive(b); err != nil {
-					log.Error(tag, fmt.Errorf("writing to handler %s", err.Error()))
-				}
-			}
-
-		}()
-
-		log.Info(tag, "connection ws://%s%s established", req.RemoteAddr, req.URL.String())
-		<-done
-		if err := tr.Close(); err != nil {
-			log.Error(tag, fmt.Errorf("closing handler %s", err.Error()))
-		}
-
-		wsc.Close()
-		s.Lock()
-		delete(s.connections, req.RemoteAddr)
-		s.Unlock()
-		log.Info(tag, "connection ws://%s%s closed", req.RemoteAddr, req.URL.String())
-
-	}
-}
-
-// Close send close message to all clients in order to let them know that
-// server is going to be shutdown.
-func (s *Server) Close() error {
-	//s.Lock()
-	s.done <- struct{}{}
-	//for _, c := range s.connections {
-	//	msg := websocket.FormatCloseMessage(websocket.CloseNormalClosure, "")
-	//	err := c.WriteMessage(websocket.CloseMessage, msg)
-	//	if err != nil {
-	//		log.Error("es.server", err)
-	//		continue
-	//	}
-	//}
-	//s.Unlock()
-
-	ctx, _ := context.WithTimeout(context.Background(), time.Second*2)
-	return s.http.Shutdown(ctx)
 }
 
 func (s *Server) Start() error {
+
 	m := http.NewServeMux()
 	m.HandleFunc("/stream", s.serve(newStreamer))
 	m.HandleFunc("/subscribe", s.serve(newSubscriber))
 
 	s.http = &http.Server{Addr: s.opts.address, Handler: m}
 
-	log.Info("es.server", "listening on http://%s", s.opts.address)
+	log.Info(tag, "listening on http://%s", s.opts.address)
 	if err := s.http.ListenAndServe(); err != nil {
-		log.Info("es.server", "exit %s", err.Error())
+		//log.Info(tag, "server closed %T %s", err, err.Error())
 	}
+
+	<-s.done
 
 	return nil
 }
 
+// Close send close message to all clients in order to let them know that
+// server is going to be shutdown.
+func (s *Server) Close() error {
+	s.actions.Range(func(key, value interface{}) bool {
+		a, ok := key.(*action)
+		if !ok {
+			log.Error(tag, fmt.Errorf("wrong key in actions"))
+			return true
+		}
+		a.shutdown <- "server shutdown"
+
+		return true
+	})
+
+	ctx, _ := context.WithTimeout(context.Background(), time.Second*2)
+	return s.http.Shutdown(ctx)
+
+}
+
 func New(opts ...Option) *Server {
 	return &Server{
-		connections: make(map[string]*websocket.Conn),
-		opts:        newOptions(opts...),
-		done:        make(chan struct{}),
+		opts: newOptions(opts...),
+		done: make(chan struct{}),
 	}
+
 }
 
 type Data struct {
@@ -202,4 +111,128 @@ type TransmitReceiver interface {
 	Transmit() <-chan Data
 	Receive([]byte) error
 	Close() error
+}
+
+type action struct {
+	conn     *websocket.Conn
+	shutdown chan string
+}
+
+func (a *action) do(t TransmitReceiver) {
+	done := make(chan string)
+	write := make(chan []byte)
+	go func() {
+		for m := range t.Transmit() {
+			if m.Error != nil {
+				log.Error(tag, fmt.Errorf("reading from handler: %s", m.Error.Error()))
+				continue
+			}
+
+			write <- m.Bytes
+		}
+		close(write)
+		done <- "transmission interrupted"
+
+	}()
+	read := make(chan []byte)
+	go func() {
+		defer close(read)
+		for {
+			_, b, err := a.conn.ReadMessage()
+			if err != nil { // when close message received, unregister action
+				a.handleError(err, "read")
+				return
+			}
+			read <- b
+		}
+
+	}()
+
+	defer func() {
+		if err := t.Close(); err != nil {
+			log.Error(tag, err)
+		}
+
+		if err := a.conn.Close(); err != nil {
+			log.Error(tag, err)
+		}
+	}()
+
+	for {
+		select {
+		case s, ok := <-done:
+			if !ok {
+				log.Debug(tag, "done:waiting for read closing")
+				time.Sleep(time.Millisecond * 100)
+				continue
+			}
+
+			a.sendCloseMessage(s)
+
+		case s, ok := <-a.shutdown:
+			if !ok {
+				log.Debug(tag, "shutdown:waiting for read closing")
+				time.Sleep(time.Millisecond * 100)
+				continue
+			}
+			a.sendCloseMessage(s)
+			close(a.shutdown)
+
+		case b, ok := <-write:
+			if !ok {
+				log.Debug(tag, "write:waiting for read closing")
+				time.Sleep(time.Millisecond * 100)
+				continue
+			}
+
+			err := a.conn.WriteMessage(websocket.TextMessage, b)
+			if err != nil {
+				a.handleError(err, "write")
+				return
+			}
+
+		case b, ok := <-read: // channel is closed, when websocket close message arrive.
+			if !ok {
+				log.Debug(tag, "%s receiving done", a.conn.RemoteAddr())
+				return // method action.do is finished
+			}
+
+			if err := t.Receive(b); err != nil {
+				log.Error(tag, fmt.Errorf("writing to handler %s", err.Error()))
+			}
+		}
+	}
+}
+func (a *action) Close() error {
+
+	return nil
+}
+
+func (a *action) sendCloseMessage(s string) {
+	msg := websocket.FormatCloseMessage(websocket.CloseGoingAway, s)
+	if err := a.conn.WriteMessage(websocket.CloseMessage, msg); err != nil {
+		log.Error(tag, err)
+	}
+	log.Debug(tag, "%s '%s' close message send to peer", a.conn.RemoteAddr(), s)
+}
+
+func (a *action) handleError(err error, s string) {
+	if err == nil {
+		return
+	}
+
+	if websocket.IsCloseError(err, websocket.CloseNormalClosure, websocket.CloseGoingAway) { // it's ok
+		log.Debug(tag, "%s %s, received close message from peer [%s]",
+			a.conn.RemoteAddr().String(), s, err.Error())
+	} else if err != nil {
+		log.Error(tag, fmt.Errorf("%s peer close received [%s]", s, err.Error()))
+	}
+
+}
+
+func newAction(c *websocket.Conn) *action {
+	return &action{
+		conn:     c,
+		shutdown: make(chan string),
+	}
 }
