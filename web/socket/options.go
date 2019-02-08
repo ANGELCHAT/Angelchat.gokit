@@ -6,7 +6,7 @@ import (
 	"os/signal"
 	"syscall"
 
-	"github.com/livechat/flux/internal/platform/log"
+	"github.com/sokool/gokit/web/log"
 )
 
 type options struct {
