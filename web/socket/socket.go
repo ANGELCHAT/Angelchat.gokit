@@ -1,6 +1,6 @@
 package socket
 
-import "github.com/livechat/flux/internal/platform/log"
+import "github.com/sokool/gokit/web/log"
 
 type (
 	logger = log.Logger
