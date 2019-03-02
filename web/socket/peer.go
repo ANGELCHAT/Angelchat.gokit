@@ -22,7 +22,7 @@ func NewPeer(socket *websocket.Conn, log Logger) *Peer {
 
 	socket.SetPongHandler(func(string) error { return nil })
 	socket.SetPingHandler(func(string) error { return nil })
-	socket.SetCloseHandler(func(int, string) error { interrupt(); log.Print("dbg", "close"); return nil })
+	socket.SetCloseHandler(func(int, string) error { interrupt(); return nil })
 
 	// read bytes from websocket and writes them into outgoing channel,
 	// method finish when socket is disconnected or Peer has been closed.
