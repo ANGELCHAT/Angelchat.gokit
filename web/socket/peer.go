@@ -3,7 +3,6 @@ package socket
 import (
 	"context"
 	"io"
-	"sync"
 	"time"
 
 	"github.com/gorilla/websocket"
@@ -16,39 +15,20 @@ type Peer struct {
 }
 
 func NewPeer(socket *websocket.Conn, log Logger) *Peer {
-	var (
-		sentinel     sync.WaitGroup
-		c, interrupt = context.WithCancel(context.Background())
-		peer         = &Peer{
-			connection: socket,
-			incoming:   make(chan []byte),
-			outgoing:   make(chan []byte),
-			alive:      c,
-		}
-	)
+	ctx, interrupt := context.WithCancel(context.Background())
+	peer := &Peer{ctx, socket, make(chan []byte), make(chan []byte)}
 
 	defer log.Print("INF", "%s connected", socket.RemoteAddr().String())
 
-	// Time allowed to read the next pong message from the client.
-	socket.SetPongHandler(func(s string) error { return nil })
-	socket.SetPingHandler(func(s string) error { return nil })
-	socket.SetCloseHandler(func(code int, text string) error {
-		// receive close frames from client socket
-		//log.Debug("close frame received from peer %d:%s", code, text)
-		interrupt()
-		return nil
-	})
+	socket.SetPongHandler(func(string) error { return nil })
+	socket.SetPingHandler(func(string) error { return nil })
+	socket.SetCloseHandler(func(int, string) error { interrupt(); log.Print("dbg", "close"); return nil })
 
 	// read bytes from websocket and writes them into outgoing channel,
 	// method finish when socket is disconnected or Peer has been closed.
 	read := func(s *websocket.Conn) {
-		sentinel.Add(1)
 		go func() {
-			defer func() {
-				//log.Debug("read: goroutine finished")
-				interrupt()
-				sentinel.Done()
-			}()
+			defer interrupt()
 
 			for {
 				_, body, err := s.ReadMessage()
@@ -68,16 +48,10 @@ func NewPeer(socket *websocket.Conn, log Logger) *Peer {
 	// write take care of deliver messages to websocket client, it finished
 	// when websocket client not responding or when done channel is closed.
 	write := func(s *websocket.Conn) {
-		sentinel.Add(1)
-		ping := time.NewTicker((time.Second * 3 * 9) / 10)
+		ping := time.NewTicker((time.Second * 15 * 9) / 10)
 
 		go func() {
-			defer func() {
-				//log.Debug("write: goroutine finished")
-				interrupt()
-				ping.Stop()
-				sentinel.Done()
-			}()
+			defer func() { interrupt(); ping.Stop() }()
 
 			for {
 				select {
@@ -103,27 +77,13 @@ func NewPeer(socket *websocket.Conn, log Logger) *Peer {
 
 	coordinate := func(s *websocket.Conn) {
 		go func() {
-			defer func() {
-				//log.Debug("coordinate: goroutine finished")
-				log.Print("INF", "%s disconnected", s.RemoteAddr().String())
-			}()
+			defer log.Print("INF", "%s disconnected", s.RemoteAddr().String())
 
 			select {
-			//case <-shutdown.Done():
-			//	log.Debug("shutdown signal received")
-			//	fmt.Println(p.Close())
-
 			case <-peer.alive.Done(): // wait for disconnection from socket
 				log.Print("DBG", "interrupt signal received")
 			}
-
-			sentinel.Wait()
-
-			// todo close them?
-			//p.outgoing = nil
-			//p.sender = nil
 		}()
-
 	}
 
 	read(socket)

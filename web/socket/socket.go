@@ -12,14 +12,14 @@ import (
 	"github.com/gorilla/websocket"
 )
 
-type Logger interface{ Print(typ, format string, a ...interface{}) }
+type Logger interface{ Print(typ, format string, args ...interface{}) }
 
 type Options struct {
 	Logger   Logger
 	Shutdown context.Context
 }
 
-func Connect(url string, h Handler, opts *Options) error {
+func Connect(url string, r Handler, o *Options) error {
 	go func() {
 		defer log.Print("DBG", "client finished")
 
@@ -43,16 +43,16 @@ func Connect(url string, h Handler, opts *Options) error {
 				continue
 			}
 			//shutdown = context.TODO()
-			server := NewPeer(socket, opts.Logger)
+			server := NewPeer(socket, o.Logger)
 			connection := NewConnection(server, server.alive)
 
-			go h.ServeWS(connection)
+			go r.ServeWS(connection)
 
 			select {
 			case <-server.alive.Done():
 				continue
 
-			case <-opts.Shutdown.Done():
+			case <-o.Shutdown.Done():
 				if err := server.Close(); err != nil {
 					log.Print("DBG", "closing server failed due %s", err)
 				}

@@ -8,7 +8,7 @@ import (
 	"github.com/google/uuid"
 )
 
-func NewConnection(p *Peer, ctx context.Context) *Client {
+func NewConnection(p *Peer, ctx context.Context) *Connection {
 	messages := make(chan Message)
 
 	go func() { // read socket and transform raw bytes in Message
@@ -34,20 +34,20 @@ func NewConnection(p *Peer, ctx context.Context) *Client {
 		}
 	}()
 
-	return &Client{
+	return &Connection{
 		Termination: ctx,
 		Messages:    messages,
 		socket:      p,
 	}
 }
 
-type Client struct {
+type Connection struct {
 	Termination context.Context
 	Messages    <-chan Message
 	socket      io.ReadWriter
 }
 
-func (s *Client) Write(typ, cid string, m interface{}) error {
+func (s *Connection) Write(typ, cid string, m interface{}) error {
 	raw, err := encode(message{uuid.New().String(), cid, typ}, m)
 	if err != nil {
 		return err
@@ -72,5 +72,5 @@ type message struct {
 }
 
 type Handler interface {
-	ServeWS(*Client)
+	ServeWS(*Connection)
 }
