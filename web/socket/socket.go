@@ -5,14 +5,13 @@ import (
 	"encoding/json"
 	"fmt"
 	"io/ioutil"
-	"log"
 	"net/http"
 	"time"
 
 	"github.com/gorilla/websocket"
 )
 
-type Logger interface{ Print(typ, format string, args ...interface{}) }
+type Logger interface{ Print(format string, args ...interface{}) }
 
 type Options struct {
 	Logger   Logger
@@ -21,7 +20,7 @@ type Options struct {
 
 func Connect(url string, r Handler, o *Options) error {
 	go func() {
-		defer log.Print("DBG", "client finished")
+		defer o.Logger.Print("DBG client finished")
 
 		for { //reconnection loop
 			var (
@@ -37,7 +36,7 @@ func Connect(url string, r Handler, o *Options) error {
 					err = fmt.Errorf("%s %s", res.Status, string(b))
 				}
 
-				log.Print("DBG", "connection failed due %s [%T]", err, err)
+				o.Logger.Print("DBG connection failed due %s [%T]", err, err)
 
 				time.Sleep(time.Second * 2)
 				continue
@@ -54,7 +53,7 @@ func Connect(url string, r Handler, o *Options) error {
 
 			case <-o.Shutdown.Done():
 				if err := server.Close(); err != nil {
-					log.Print("DBG", "closing server failed due %s", err)
+					o.Logger.Print("DBG closing server failed due %s", err)
 				}
 				return
 			}
@@ -93,7 +92,7 @@ func Serve(h Handler, opts *Options) http.HandlerFunc {
 		case <-connection.Termination.Done():
 		case <-opts.Shutdown.Done():
 			if err := client.Close(); err != nil {
-				opts.Logger.Print("dbg", "closing client failed due %s", err)
+				opts.Logger.Print("DBG closing client failed due %s", err)
 			}
 		}
 	}

@@ -40,7 +40,7 @@ func NewConnection(p *Peer, ctx context.Context) *Connection {
 		socket:      p,
 	}
 }
-
+// Transmission
 type Connection struct {
 	Termination context.Context
 	Messages    <-chan Message
