@@ -60,7 +60,7 @@ func (l *Logger) Print(format string, a ...interface{}) {
 	typ := strings.ToUpper(s[0])
 
 	if typ != "INF" && typ != "DBG" && typ != "ERR" {
-		typ = "DBG"
+		typ = "INF"
 	}
 
 	format = strings.TrimSpace(strings.Replace(format, typ, "", 1))
