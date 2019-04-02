@@ -9,22 +9,86 @@ import (
 
 type Registry map[string]reflect.Type
 
-func (r Registry) Register(objects ...interface{}) {
+func (r Registry) Register(objects ...interface{}) ([]string, error) {
+	var names []string
 	for i := range objects {
-		name, typ, err := r.Name(objects[i])
+		name, err := r.Add(objects[i], "")
 		if err != nil {
-			panic(err)
+			return names, err
 		}
 
-		if _, ok := r[name]; ok {
-			return
-		}
-
-		r[name] = typ
+		names = append(names, name)
 	}
+
+	return names, nil
 }
 
-func (r Registry) JSON(name string, body []byte) (interface{}, error) {
+func (r Registry) Add(object interface{}, name string) (string, error) {
+	n, typ, err := r.compose(object)
+	if err != nil {
+		return name, err
+	}
+
+	if name == "" {
+		name = n
+	}
+
+	r[name] = typ
+
+	return name, nil
+}
+
+func (r Registry) Exists(name string) bool { _, ok := r[name]; return ok }
+
+func (r Registry) Has(object interface{}) (string, error) {
+	name, _, err := r.compose(object)
+	if err != nil {
+		return name, err
+	}
+
+	if _, ok := r[name]; !ok {
+		return name, fmt.Errorf("object %s not found in reqistry", name)
+	}
+
+	return name, nil
+}
+
+func (r Registry) Names() []string {
+	var o []string
+	for n := range r {
+		o = append(o, n)
+	}
+	return o
+}
+
+func (r Registry) Info(name string) string {
+	////t, ok := r[name]
+	////if !ok {
+	////	return "undefined"
+	////}
+	////
+	////
+	////fmt.Println(name)
+	////var nfo string
+	////for i := 0; i < t.NumField(); i++ {
+	////	nfo += t.Field(i).Name + ":" + t.Field(i).Type.Name() + ", "
+	////}
+	////
+	////return fmt.Sprintf("{%s}", strings.TrimSuffix(nfo, ", "))
+	////return ""
+	//
+	//z, e1 := r.Decode(name, []byte(""))
+	//if e1 != nil {
+	//	fmt.Println(name, e1)
+	//}
+	//o, e2 := json.Marshal(z)
+	//if e2 != nil {
+	//	fmt.Println(name, e2)
+	//}
+	return "TBD..."
+}
+
+func (r Registry) Decode(name string, body []byte) (interface{}, error) {
 	name = strings.Title(name)
 	o, ok := r[name]
 	if !ok {
@@ -42,56 +106,38 @@ func (r Registry) JSON(name string, body []byte) (interface{}, error) {
 	return value.Elem().Interface(), nil
 }
 
-func (r Registry) Has(object interface{}) (string, error) {
-	name, _, err := r.Name(object)
-	if err != nil {
-		return name, err
+func (r Registry) Encode(object interface{}) (string, []byte, error) {
+	var (
+		name string
+		body []byte
+		err  error
+	)
+
+	if name, err = r.Has(object); err != nil {
+		return name, nil, err
 	}
 
-	if _, ok := r[name]; !ok {
-		return name, fmt.Errorf("object %s not found in reqistry", name)
-	}
+	body, err = json.Marshal(object)
 
-	return name, nil
+	return name, body, err
 }
 
-func (r Registry) Name(object interface{}) (string, reflect.Type, error) {
-	typ := reflect.TypeOf(object)
+func (r Registry) compose(object interface{}) (string, reflect.Type, error) {
+	var typ reflect.Type
+	var ok bool
+	if typ, ok = object.(reflect.Type); !ok {
+		typ = reflect.TypeOf(object)
+	}
 
 	if typ.Kind() == reflect.Ptr {
 		typ = typ.Elem()
 	}
 
 	if typ.Name() == typ.Kind().String() {
-		return "", typ, fmt.Errorf("registry accepts only named types")
+		return "", typ, fmt.Errorf("only named types allowed")
 	}
 
-	return strings.Replace(typ.Name(), "*", "", -1), typ, nil
+	name := strings.Replace(typ.Name(), "*", "", -1)
 
-}
-
-func (r Registry) Names() []string {
-	var o []string
-	for n := range r {
-		o = append(o, n)
-	}
-	return o
-}
-
-func examiner(t reflect.Type, depth int) {
-	fmt.Println(strings.Repeat("\t", depth), "Type is", t.Name(), "and kind is", t.Kind())
-	switch t.Kind() {
-	case reflect.Array, reflect.Chan, reflect.Map, reflect.Ptr, reflect.Slice:
-		fmt.Println(strings.Repeat("\t", depth+1), "Contained type:")
-		examiner(t.Elem(), depth+1)
-	case reflect.Struct:
-		for i := 0; i < t.NumField(); i++ {
-			f := t.Field(i)
-			fmt.Println(strings.Repeat("\t", depth+1), "Field", i+1, "name is", f.Name, "type is", f.Type.Name(), "and kind is", f.Type.Kind())
-			if f.Tag != "" {
-				fmt.Println(strings.Repeat("\t", depth+2), "Tag is", f.Tag)
-				fmt.Println(strings.Repeat("\t", depth+2), "tag1 is", f.Tag.Get("tag1"), "tag2 is", f.Tag.Get("tag2"))
-			}
-		}
-	}
+	return strings.Title(name), typ, nil
 }

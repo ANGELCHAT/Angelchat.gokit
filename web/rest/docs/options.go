@@ -46,12 +46,11 @@ func newOptions(ops ...Option) *Options {
 var verbose = true
 
 func info(f string, args ...interface{}) {
-
-	log.Default.Info(f, args...)
+	log.Default.Print(f, args...)
 }
 
 func debug(f string, args ...interface{}) {
 	if verbose {
-		log.Default.Debug(f, args...)
+		log.Default.Print("DBG "+f, args...)
 	}
 }

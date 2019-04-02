@@ -12,7 +12,7 @@ import (
 var Default = New(os.Stdout, "", true)
 
 type Logger struct {
-	output    io.Writer
+	w         io.Writer
 	verbose   bool
 	colors    bool
 	timestamp bool
@@ -26,7 +26,7 @@ func New(w io.Writer, tag string, verbose bool) *Logger {
 	}
 
 	return &Logger{
-		output:    w,
+		w:         w,
 		verbose:   verbose,
 		colors:    w == os.Stdout,
 		tag:       tag,
@@ -37,21 +37,21 @@ func New(w io.Writer, tag string, verbose bool) *Logger {
 func (l *Logger) Write(p []byte) (n int, err error) {
 	s := string(p)
 	if p := strings.Index(s, "[DEBUG] "); p != -1 {
-		l.Debug(s[p+8:])
+		l.Print("DBG " + s[p+8:])
 		return
 	}
 
 	if p := strings.Index(s, "[ERROR] "); p != -1 {
-		l.Info("%s", fmt.Errorf(s[p+8:]))
+		l.Print("ERR " + s[p+8:])
 		return
 	}
 
 	if p := strings.Index(s, "[INFO] "); p != -1 {
-		l.Info(s[p+7:])
+		l.Print("INF " + s[p+7:])
 		return
 	}
 
-	l.Info(s)
+	l.Print("INF " + s)
 	return
 }
 
@@ -60,10 +60,12 @@ func (l *Logger) Print(format string, a ...interface{}) {
 	typ := strings.ToUpper(s[0])
 
 	if typ != "INF" && typ != "DBG" && typ != "ERR" {
+		format = "INF " + format
+		s[0] = "INF"
 		typ = "INF"
 	}
 
-	format = strings.TrimSpace(strings.Replace(format, typ, "", 1))
+	format = strings.TrimSpace(strings.Replace(format, s[0], "", 1))
 
 	if len(a) >= 1 {
 		if _, ok := a[0].(error); ok {
@@ -76,7 +78,7 @@ func (l *Logger) Print(format string, a ...interface{}) {
 	}
 
 	// syslog support
-	if w, ok := l.output.(*syslog.Writer); ok {
+	if w, ok := l.w.(*syslog.Writer); ok {
 		m := fmt.Sprintf("%s %s %s", typ, l.tag, fmt.Sprintf(format, a...))
 
 		switch typ {
@@ -113,9 +115,7 @@ func (l *Logger) Print(format string, a ...interface{}) {
 		x = fmt.Sprintf("[\x1b[36;1m%s\x1b[0m] ", l.tag)
 	}
 	n := time.Now().Format("2006/01/02 15:04:05.000")
-	l.output.Write([]byte(fmt.Sprintf("%s [%s] %s%s\n", n, typ, x, format)))
+	l.w.Write([]byte(fmt.Sprintf("%s [%s] %s%s\n", n, typ, x, format)))
 }
 
-func (l *Logger) WithTag(s string) *Logger                 { return New(l.output, s, l.verbose) }
-func (l *Logger) Info(format string, args ...interface{})  { l.Print("INF "+format, args...) }
-func (l *Logger) Debug(format string, args ...interface{}) { l.Print("DBG"+format, args...) }
+func (l *Logger) WithTag(name string) *Logger { return New(l.w, name, l.verbose) }
