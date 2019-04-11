@@ -11,7 +11,9 @@ import (
 	"github.com/gorilla/websocket"
 )
 
-type Logger interface{ Print(format string, args ...interface{}) }
+type Logger interface {
+	Print(format string, args ...interface{})
+}
 
 type Options struct {
 	Logger   Logger

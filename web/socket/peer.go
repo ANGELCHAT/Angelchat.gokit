@@ -12,11 +12,14 @@ type Peer struct {
 	alive              context.Context
 	connection         *websocket.Conn
 	incoming, outgoing chan []byte
+
+	pos int
+	buf []byte
 }
 
 func NewPeer(socket *websocket.Conn, log Logger) *Peer {
 	ctx, interrupt := context.WithCancel(context.Background())
-	peer := &Peer{ctx, socket, make(chan []byte), make(chan []byte)}
+	peer := &Peer{ctx, socket, make(chan []byte), make(chan []byte), 0, nil}
 
 	defer log.Print("INF %s connected", socket.RemoteAddr().String())
 
@@ -63,7 +66,6 @@ func NewPeer(socket *websocket.Conn, log Logger) *Peer {
 						return
 					}
 
-
 				case body := <-peer.incoming: // bytes from incoming channel sent to socket
 					if err := s.WriteMessage(websocket.TextMessage, body); err != nil {
 						return
@@ -94,13 +96,41 @@ func NewPeer(socket *websocket.Conn, log Logger) *Peer {
 }
 
 // Read
+// todo make it more reliable
 func (p *Peer) Read(b []byte) (n int, err error) {
+	bl := len(b)
+	if p.pos != 0 {
+		if p.pos+bl > len(p.buf) {
+			defer func() { p.pos = 0; p.buf = nil }()
+			n := copy(b, append(p.buf[p.pos:p.pos+len(p.buf)-p.pos], '\n'))
+			//fmt.Printf("sending %d(of %d) bytes:%s\n", n, bl, p.buf[p.pos:p.pos+len(p.buf)-p.pos])
+
+			return n, nil
+		}
+		n := copy(b, append(p.buf[p.pos:p.pos+bl]))
+		//fmt.Printf("sending %d(of %d) bytes:%s\n", n, bl, p.buf[p.pos:p.pos+bl])
+		p.pos += n
+		return n, nil
+	}
+
 	select {
 	case <-p.alive.Done(): // reading from disconnected socket returns end of file error.
 		return 0, io.EOF
 
 	case src := <-p.outgoing:
-		return copy(b, append(src, '\n')), nil
+		sl := len(src)
+		//fmt.Printf("received %d bytes of %s\n", sl, string(src))
+		if sl <= bl {
+			//fmt.Printf("sending all %d bytes of %s\n", sl, string(src))
+			return copy(b, append(src, '\n')), nil
+		}
+
+		p.buf = src
+		p.pos = copy(b, append(p.buf[:bl]))
+
+		//fmt.Printf("sending %d bytes:%s\n", p.pos, p.buf[:bl])
+
+		return p.pos, nil
 	}
 }
 
