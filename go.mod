@@ -1,4 +1,4 @@
-module github.com/sokool/gokit
+module github.com/livechat/gokit
 
 require (
 	github.com/google/uuid v1.1.1
