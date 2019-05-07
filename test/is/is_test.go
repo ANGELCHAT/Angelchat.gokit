@@ -3,7 +3,7 @@ package is_test
 import (
 	"testing"
 
-	"github.com/sokool/gokit/test/is"
+	"github.com/livecaht/gokit/test/is"
 )
 
 func TestMustAssert(t *testing.T) {

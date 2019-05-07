@@ -4,8 +4,8 @@ import (
 	"testing"
 	"time"
 
-	"github.com/sokool/gokit/locker"
-	"github.com/sokool/gokit/log"
+	"github.com/livechat/gokit/locker"
+	"github.com/livechat/gokit/log"
 )
 
 func action(l *locker.Key, key string, attempt int, d time.Duration) {

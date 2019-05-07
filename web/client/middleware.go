@@ -10,7 +10,7 @@ import (
 	"net/url"
 	"time"
 
-	"github.com/sokool/gokit/web/log"
+	"github.com/livechat/gokit/log"
 )
 
 // Middleware wraps Endpoint with extra behavior such as logging, decoding, encoding,
@@ -189,11 +189,11 @@ func Logging(logger log.Logger) Middleware {
 		return EndpointFunc(func(r *http.Request) (*http.Response, error) {
 			res, err := e.Do(r)
 
-			logger.Debug("HTTP.request.url", "[%s] %s", r.Method, r.URL)
-			logger.Debug("HTTP.request.headers", "%v", r.Header)
+			logger.Print("HTTP.request.url [%s] %s", r.Method, r.URL)
+			logger.Print("HTTP.request.headers %v", r.Header)
 			in := r.Context().Value("in")
 			if in != nil {
-				logger.Debug("HTTP.request.body", "%v", in)
+				logger.Print("HTTP.request.body %v", in)
 			}
 
 			if res != nil {
@@ -203,10 +203,10 @@ func Logging(logger log.Logger) Middleware {
 				res.Body = ioutil.NopCloser(b)
 
 				o, _ := ioutil.ReadAll(s)
-				logger.Debug("HTTP.response.status", "%v", res.Status)
-				logger.Debug("HTTP.response.headers", "%v", res.Header)
-				logger.Debug("HTTP.response.size", "%.2fKB", float64(len(o))/1024)
-				logger.Debug("HTTP.response.body", "%s\n", string(o))
+				logger.Print("HTTP.response.status %v", res.Status)
+				logger.Print("HTTP.response.headers %v", res.Header)
+				logger.Print("HTTP.response.size %.2fKB", float64(len(o))/1024)
+				logger.Print("HTTP.response.body %s\n", string(o))
 			}
 
 			return res, err
@@ -238,7 +238,7 @@ func Trace(fn func(TraceInfo), log log.Logger) Middleware {
 				},
 				ConnectDone: func(net, addr string, err error) {
 					if err != nil {
-						log.Debug("HTTP.trace.details", "unable connect to host %v: %v", addr, err)
+						log.Print("HTTP.trace.details unable connect to host %v: %v", addr, err)
 					}
 					t2 = time.Now()
 				},
@@ -253,7 +253,7 @@ func Trace(fn func(TraceInfo), log log.Logger) Middleware {
 			res, err := e.Do(r)
 
 			if err != nil {
-				log.Debug("HTTP.trace.details.error", err.Error())
+				log.Print("HTTP.trace.details.error %s", err.Error())
 				return res, err
 			}
 
@@ -303,14 +303,14 @@ func Trace(fn func(TraceInfo), log log.Logger) Middleware {
 				token = token[:8]
 			}
 
-			log.Debug("HTTP.trace.details",
+			log.Print("HTTP.trace.details"+
 				"\n\ttime: %s\n"+
-					"\tdns: %s\n"+
-					"\ttcp: %s\n"+
-					"\ttls: %s\n"+
-					"\tserver_processing: %s\n"+
-					"\tcontent_read: %s\n"+
-					"\ttotal: %s -> %s",
+				"\tdns: %s\n"+
+				"\ttcp: %s\n"+
+				"\ttls: %s\n"+
+				"\tserver_processing: %s\n"+
+				"\tcontent_read: %s\n"+
+				"\ttotal: %s -> %s",
 				ti.Timestamp.Format("2006-01-02 15:04:05.000"),
 				ti.DNSLookup,
 				ti.TCPConnection,

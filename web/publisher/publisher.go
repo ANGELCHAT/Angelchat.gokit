@@ -7,7 +7,7 @@ import (
 	"net/http"
 	"os"
 
-	wlog "github.com/sokool/gokit/web/log"
+	wlog "github.com/livechat/gokit/log"
 )
 
 const tag = "publisher"
@@ -30,30 +30,30 @@ func (d *Publisher) Publish(url string, v interface{}) {
 func (d *Publisher) run() {
 	for e := range d.send {
 		if len(e.url) == 0 {
-			log.Info("%s", fmt.Errorf("no url"))
+			log.Print("%s", fmt.Errorf("no url"))
 			continue
 		}
 
 		data, err := json.Marshal(e.data)
 		if err != nil {
-			log.Info("json.Marshal failed due %s", err)
+			log.Print("json.Marshal failed due %s", err)
 			continue
 		}
 
 		res, err := http.Post(e.url, "application/json", bytes.NewReader(data))
 		if err != nil {
-			log.Info("http.POST failed due %s", err)
+			log.Print("http.POST failed due %s", err)
 			continue
 		}
 
 		res.Body.Close()
 
 		if res.StatusCode < http.StatusOK || res.StatusCode >= http.StatusBadRequest {
-			log.Info("%s", fmt.Errorf("received %d status from %s", res.StatusCode, e.url))
+			log.Print("%s", fmt.Errorf("received %d status from %s", res.StatusCode, e.url))
 			continue
 		}
 
-		log.Info("data send to %s", e.url)
+		log.Print("data send to %s", e.url)
 	}
 }
 
