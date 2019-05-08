@@ -6,7 +6,6 @@ import (
 	"fmt"
 	"io/ioutil"
 	"net/http"
-	"sync"
 	"time"
 
 	"github.com/gorilla/websocket"
@@ -68,28 +67,24 @@ func Connect(url string, r Handler, o *Options) error {
 }
 
 func Serve(h Handler, opts *Options) http.HandlerFunc {
-	var (
-		m        sync.Mutex
-		err      error
-		socket   *websocket.Conn
-		upgrader = websocket.Upgrader{
-			ReadBufferSize:  1024,
-			WriteBufferSize: 1024,
-			CheckOrigin: func(r *http.Request) bool {
-				return true
-			},
-		}
-	)
 
 	return func(w http.ResponseWriter, r *http.Request) {
-		m.Lock()
-		{
-			if socket, err = upgrader.Upgrade(w, r, nil); err != nil {
-				http.Error(w, err.Error(), http.StatusBadRequest)
-				return
+		var (
+			err      error
+			socket   *websocket.Conn
+			upgrader = websocket.Upgrader{
+				ReadBufferSize:  1024,
+				WriteBufferSize: 1024,
+				CheckOrigin: func(r *http.Request) bool {
+					return true
+				},
 			}
+		)
+
+		if socket, err = upgrader.Upgrade(w, r, nil); err != nil {
+			http.Error(w, err.Error(), http.StatusBadRequest)
+			return
 		}
-		m.Unlock()
 
 		client := NewPeer(socket, opts.Logger)
 		connection := NewConnection(client, client.alive)
