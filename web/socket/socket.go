@@ -93,7 +93,7 @@ func Serve(h Handler, opts *Options) http.HandlerFunc {
 		case <-connection.Termination.Done():
 		case <-opts.Shutdown.Done():
 			if err := client.Close(); err != nil {
-				opts.Log.Print("DBG closing client failed due %s", err)
+				opts.Log("DBG closing client failed due %s", err)
 			}
 		}
 	}
