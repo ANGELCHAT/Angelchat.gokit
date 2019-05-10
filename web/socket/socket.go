@@ -11,18 +11,16 @@ import (
 	"github.com/gorilla/websocket"
 )
 
-type Logger interface {
-	Print(format string, args ...interface{})
-}
+type Logger func(format string, args ...interface{})
 
 type Options struct {
-	Logger   Logger
+	Log      Logger
 	Shutdown context.Context
 }
 
 func Connect(url string, r Handler, o *Options) error {
 	go func() {
-		defer o.Logger.Print("DBG client finished")
+		defer o.Log("DBG client finished")
 
 		for { //reconnection loop
 			var (
@@ -38,13 +36,13 @@ func Connect(url string, r Handler, o *Options) error {
 					err = fmt.Errorf("%s %s", res.Status, string(b))
 				}
 
-				o.Logger.Print("DBG connection failed due %s [%T]", err, err)
+				o.Log("DBG connection failed due %s [%T]", err, err)
 
 				time.Sleep(time.Second * 2)
 				continue
 			}
 			//shutdown = context.TODO()
-			server := NewPeer(socket, o.Logger)
+			server := NewPeer(socket, o.Log)
 			connection := NewConnection(server, server.alive)
 
 			go r.ServeWS(connection)
@@ -55,7 +53,7 @@ func Connect(url string, r Handler, o *Options) error {
 
 			case <-o.Shutdown.Done():
 				if err := server.Close(); err != nil {
-					o.Logger.Print("DBG closing server failed due %s", err)
+					o.Log("DBG closing server failed due %s", err)
 				}
 				return
 			}
@@ -86,7 +84,7 @@ func Serve(h Handler, opts *Options) http.HandlerFunc {
 			return
 		}
 
-		client := NewPeer(socket, opts.Logger)
+		client := NewPeer(socket, opts.Log)
 		connection := NewConnection(client, client.alive)
 
 		go h.ServeWS(connection)
@@ -95,7 +93,7 @@ func Serve(h Handler, opts *Options) http.HandlerFunc {
 		case <-connection.Termination.Done():
 		case <-opts.Shutdown.Done():
 			if err := client.Close(); err != nil {
-				opts.Logger.Print("DBG closing client failed due %s", err)
+				opts.Log.Print("DBG closing client failed due %s", err)
 			}
 		}
 	}

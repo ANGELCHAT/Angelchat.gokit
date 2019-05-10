@@ -21,7 +21,7 @@ func NewPeer(socket *websocket.Conn, log Logger) *Peer {
 	ctx, interrupt := context.WithCancel(context.Background())
 	peer := &Peer{ctx, socket, make(chan []byte), make(chan []byte), 0, nil}
 
-	defer log.Print("INF %s connected", socket.RemoteAddr().String())
+	defer log("INF %s connected", socket.RemoteAddr().String())
 
 	socket.SetPongHandler(func(string) error { return nil })
 	socket.SetPingHandler(func(string) error { return nil })
@@ -79,11 +79,11 @@ func NewPeer(socket *websocket.Conn, log Logger) *Peer {
 
 	coordinate := func(s *websocket.Conn) {
 		go func() {
-			defer log.Print("INF %s disconnected", s.RemoteAddr().String())
+			defer log("INF %s disconnected", s.RemoteAddr().String())
 
 			select {
 			case <-peer.alive.Done(): // wait for disconnection from socket
-				log.Print("DBG interrupt signal received")
+				log("DBG interrupt signal received")
 			}
 		}()
 	}
