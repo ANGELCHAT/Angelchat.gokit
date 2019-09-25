@@ -303,7 +303,7 @@ func Trace(fn func(TraceInfo), log Logger) Middleware {
 				token = token[:8]
 			}
 
-			log.Debug("HTTP.trace.details",
+			log("HTTP.trace.details",
 				"\n\ttime: %s\n"+
 					"\tdns: %s\n"+
 					"\ttcp: %s\n"+
