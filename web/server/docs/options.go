@@ -1,6 +1,6 @@
 package docs
 
-import "github.com/sokool/gokit/log"
+import "github.com/livechat/gokit/log"
 
 type Options struct {
 	Storage    Endpoints

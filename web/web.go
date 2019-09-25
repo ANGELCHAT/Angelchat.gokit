@@ -3,7 +3,7 @@ package web
 import (
 	"net/http"
 
-	"github.com/sokool/gokit/web/server"
+	"github.com/livechat/gokit/web/server"
 )
 
 type Server struct{ *server.Router }

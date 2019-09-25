@@ -3,7 +3,7 @@ package server
 import (
 	"net/http"
 
-	"github.com/sokool/gokit/web/server/docs"
+	"github.com/livechat/gokit/web/server/docs"
 )
 
 func Run(addr string, r *Router) error { return http.ListenAndServe(addr, r) }
