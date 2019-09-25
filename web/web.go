@@ -6,11 +6,6 @@ import (
 	"github.com/sokool/gokit/web/server"
 )
 
-//func Server() {
-//	server.NewRouter()
-//	server.Run("addr", server.NewRouter())
-//}
-
 type Server struct{ *server.Router }
 
 func NewServer() *Server { return &Server{server.NewRouter()} }
