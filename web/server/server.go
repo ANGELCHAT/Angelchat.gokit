@@ -26,7 +26,13 @@ func (r *Request) Query(name string, otherwise ...string) string {
 
 func (r *Request) Param(name string) string { return mux.Vars(r.Reader)[name] }
 
-func (r *Request) Return(v interface{}, err error) { r.Response.Body, r.Response.Error = v, err }
+func (r *Request) Return(v interface{}, err error) {
+	if err != nil {
+		r.Response.Error = err
+	}
+
+	r.Response.Body = v
+}
 
 type Endpoint interface {
 	Do(*Request)
