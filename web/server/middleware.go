@@ -58,14 +58,13 @@ func (middleware) JSON(typ string) Middleware {
 
 func (middleware) Error(f func(error) (string, int)) Middleware {
 	if f == nil {
-		f = func(err error) (string, int) { return err.Error(), http.StatusInternalServerError }
+		f = func(err error) (string, int) { return err.Error(), http.StatusBadRequest }
 	}
 
 	return func(next Endpoint) Endpoint {
 		return EndpointFunc(func(r *Request) {
 			next.Do(r)
 			if r.Response.Error != nil {
-				fmt.Println("errorek")
 				message, code := f(r.Response.Error)
 				http.Error(r.Writer, message, code)
 				return
