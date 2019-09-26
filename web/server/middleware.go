@@ -9,13 +9,13 @@ import (
 	"github.com/Rican7/conjson/transform"
 )
 
-var With = middlewares{}
+var With middleware
 
 type Logger func(message string, args ...interface{})
 
-type middlewares struct{}
+type middleware struct{}
 
-func (middlewares) Logger(log Logger) Middleware {
+func (middleware) Logger(log Logger) Middleware {
 	return func(n Endpoint) Endpoint {
 		return EndpointFunc(func(r *Request) {
 			//n.ServeHTTP()
@@ -29,7 +29,7 @@ func (middlewares) Logger(log Logger) Middleware {
 	}
 }
 
-func (middlewares) JSON(typ string) Middleware {
+func (middleware) JSON(typ string) Middleware {
 	t := transform.CamelCaseKeys(false)
 
 	switch typ {
@@ -43,27 +43,38 @@ func (middlewares) JSON(typ string) Middleware {
 		return EndpointFunc(func(r *Request) {
 			next.Do(r)
 
-			err := r.Response.Error
-			body := r.Response.Body
-			res := r.Writer
-
-			if err != nil {
-				http.Error(res, err.Error(), http.StatusInternalServerError)
+			if r.Response.Error != nil {
 				return
 			}
 
-			res.Header().Set("content-type", "application/json")
-			res.WriteHeader(http.StatusOK)
+			w := r.Writer
+			w.Header().Set("content-type", "application/json")
+			w.WriteHeader(http.StatusOK)
 
-			if err := conjson.NewEncoder(json.NewEncoder(res), t).Encode(body); err != nil {
-				http.Error(r.Writer, err.Error(), http.StatusInternalServerError)
+			r.Response.Error = conjson.NewEncoder(json.NewEncoder(w), t).Encode(r.Response.Body)
+		})
+	}
+}
+
+func (middleware) Error(f func(error) (string, int)) Middleware {
+	if f == nil {
+		f = func(err error) (string, int) { return err.Error(), http.StatusInternalServerError }
+	}
+
+	return func(next Endpoint) Endpoint {
+		return EndpointFunc(func(r *Request) {
+			next.Do(r)
+			if r.Response.Error != nil {
+				fmt.Println("errorek")
+				message, code := f(r.Response.Error)
+				http.Error(r.Writer, message, code)
 				return
 			}
 		})
 	}
 }
 
-func (middlewares) Test(label string) Middleware {
+func (middleware) Test(label string) Middleware {
 	return func(n Endpoint) Endpoint {
 		return EndpointFunc(func(r *Request) {
 			fmt.Printf("%s: #1\n", label)
