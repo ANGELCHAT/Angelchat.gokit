@@ -1,3 +1,5 @@
+github.com/Rican7/conjson v0.1.0 h1:8dNZzdy1mzwo9LOideWcOyY3PbKdsJPF7hj31/mrIiw=
+github.com/Rican7/conjson v0.1.0/go.mod h1:CL1oWzzC9Ox36F2ghCPmtNpdW/ZKRunAc4dEoCL4Qyc=
 github.com/google/uuid v1.1.1 h1:Gkbcsh/GbpXz7lPftLA3P6TYMwjCLYm83jiFQZF/3gY=
 github.com/google/uuid v1.1.1/go.mod h1:TIyPZe4MgqvfeYDBFedMoGGpEw/LqOeaOT+nhxU+yHo=
 github.com/gorilla/mux v1.7.0 h1:tOSd0UKHQd6urX6ApfOn4XdBMY6Sh1MfxV3kmaazO+U=

@@ -1,41 +1,60 @@
 package server
 
 import (
+	"context"
 	"net/http"
 
 	"github.com/gorilla/mux"
 )
 
-type Router struct{ r *mux.Router }
+type Router struct{ mux *mux.Router }
 
-func NewRouter() *Router {
-	return &Router{
-		r: mux.NewRouter(),
-	}
-}
+func NewRouter() *Router { return &Router{mux: mux.NewRouter()} }
 
 func (r *Router) Prefix(prefix string, ms ...Middleware) *Router {
-	pr := r.r.PathPrefix(prefix).Name(prefix + "prefix").Subrouter()
+	pr := r.mux.PathPrefix(prefix).Name(prefix + "prefix").Subrouter()
 
 	for _, m := range ms {
-		pr.Use(mux.MiddlewareFunc(m))
+		pr.Use(r.mtom(m))
 	}
 
-	return &Router{r: pr}
+	return &Router{mux: pr}
 }
 
-func (r *Router) Handle(path string, h http.HandlerFunc, method string, ms ...Middleware) *Router {
-	handler := http.Handler(h)
+func (r *Router) Handle(path string, e EndpointFunc, method string, ms ...Middleware) *Router {
+	var h Endpoint = e
 	for i := len(ms) - 1; i >= 0; i-- {
-		handler = ms[i](handler)
+		h = ms[i](h)
 	}
 
-	rh := r.r.Handle(path, handler)
+	f := func(res http.ResponseWriter, req *http.Request) { h.Do(r.request(res, req)) }
+	rh := r.mux.Handle(path, http.HandlerFunc(f))
 	rh.Methods(method)
 
 	return r
 }
 
+func (r *Router) Do(req *Request) {}
+
 func (r *Router) ServeHTTP(res http.ResponseWriter, req *http.Request) {
-	r.r.ServeHTTP(res, req)
+	req = req.WithContext(context.WithValue(req.Context(), &rkey, &Request{}))
+	r.mux.ServeHTTP(res, req)
 }
+
+func (r *Router) request(res http.ResponseWriter, req *http.Request) *Request {
+	x := req.Context().Value(&rkey).(*Request)
+	x.Reader = req
+	x.Writer = res
+	return x
+}
+
+func (r *Router) mtom(m Middleware) mux.MiddlewareFunc {
+	return func(n http.Handler) http.Handler {
+		f := EndpointFunc(func(r *Request) { n.ServeHTTP(r.Writer, r.Reader) })
+		return http.HandlerFunc(func(res http.ResponseWriter, req *http.Request) {
+			m(f).Do(r.request(res, req))
+		})
+	}
+}
+
+var rkey = "covered-request"
