@@ -27,7 +27,7 @@ func (r *Router) Handle(path string, e EndpointFunc, method string, ms ...Middle
 		h = ms[i](h)
 	}
 
-	f := func(res http.ResponseWriter, req *http.Request) { h.Do(requestGet(res, req)) }
+	f := func(res http.ResponseWriter, req *http.Request) { h.Do(getRequest(res, req)) }
 	rh := r.mux.Handle(path, http.HandlerFunc(f))
 	rh.Methods(method)
 
@@ -37,17 +37,17 @@ func (r *Router) Handle(path string, e EndpointFunc, method string, ms ...Middle
 func (r *Router) Do(req *Request) {}
 
 func (r *Router) ServeHTTP(res http.ResponseWriter, req *http.Request) {
-	r.mux.ServeHTTP(res, requestSet(res, req))
+	r.mux.ServeHTTP(res, setRequest(res, req))
 }
 
-func requestGet(res http.ResponseWriter, req *http.Request) *Request {
-	x := req.Context().Value(&rkey).(*Request)
-	x.Reader = req
-	x.Writer = res
-	return x
+func getRequest(res http.ResponseWriter, req *http.Request) *Request {
+	r := req.Context().Value(&rkey).(*Request)
+	r.Reader = req
+	r.Writer = res
+	return r
 }
 
-func requestSet(res http.ResponseWriter, req *http.Request) *http.Request {
+func setRequest(_ http.ResponseWriter, req *http.Request) *http.Request {
 	return req.WithContext(context.WithValue(req.Context(), &rkey, &Request{}))
 }
 

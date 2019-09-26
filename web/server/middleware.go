@@ -95,7 +95,7 @@ func Mtoh(m Middleware) func(http.Handler) http.Handler {
 	return func(n http.Handler) http.Handler {
 		f := EndpointFunc(func(r *Request) { n.ServeHTTP(r.Writer, r.Reader) })
 		return http.HandlerFunc(func(res http.ResponseWriter, req *http.Request) {
-			m(f).Do(requestGet(res, req))
+			m(f).Do(getRequest(res, req))
 		})
 	}
 }
@@ -103,9 +103,7 @@ func Mtoh(m Middleware) func(http.Handler) http.Handler {
 // Htom converts standard http Middleware to server.Middleware
 func Htom(m func(http.Handler) http.Handler) Middleware {
 	return func(e Endpoint) Endpoint {
-		f := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-			e.Do(requestGet(w, r))
-		})
+		f := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) { e.Do(getRequest(w, r)) })
 		return EndpointFunc(func(r *Request) {
 			m(f).ServeHTTP(r.Writer, r.Reader)
 		})
