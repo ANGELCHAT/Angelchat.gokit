@@ -24,7 +24,7 @@ func (middleware) Logger(log Logger) Middleware {
 
 			n.Do(r)
 
-			log("%s %s", m, u)
+			log("%s [%d] %s", m, r.Response.Status, u)
 		})
 	}
 }
@@ -49,9 +49,12 @@ func (middleware) JSON(typ string) Middleware {
 
 			w := r.Writer
 			w.Header().Set("content-type", "application/json")
-			w.WriteHeader(http.StatusOK)
 
-			r.Response.Error = conjson.NewEncoder(json.NewEncoder(w), t).Encode(r.Response.Body)
+			if err := conjson.NewEncoder(json.NewEncoder(w), t).Encode(r.Response.Body); err != nil {
+				r.Response.Error = err
+				r.Response.Status = http.StatusInternalServerError
+			}
+
 		})
 	}
 }
@@ -65,10 +68,12 @@ func (middleware) Error(f func(error) (string, int)) Middleware {
 		return EndpointFunc(func(r *Request) {
 			next.Do(r)
 			if r.Response.Error != nil {
-				message, code := f(r.Response.Error)
-				http.Error(r.Writer, message, code)
+				var message string
+				message, r.Response.Status = f(r.Response.Error)
+				http.Error(r.Writer, message, r.Response.Status)
 				return
 			}
+			r.Response.Status = http.StatusOK
 		})
 	}
 }

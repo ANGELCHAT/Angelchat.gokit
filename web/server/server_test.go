@@ -22,6 +22,8 @@ func TestName(t *testing.T) {
 				"two": "dwa",
 			},
 		}
+
+		//r.Response.Error = fmt.Errorf("dupa")
 	}
 
 	test := func(label string) server.Middleware { return server.Htom(testA(label)) }
@@ -30,7 +32,7 @@ func TestName(t *testing.T) {
 	failed := server.With.Error(nil)
 	r := server.New()
 	r.
-		Prefix("/chat", failed, test("A"), logger, json).
+		Prefix("/chat", logger, failed, test("A"), json).
 		Prefix("/tags", test("B"), test("C")).
 		Handle("/{id}", h, "GET", test("D"))
 

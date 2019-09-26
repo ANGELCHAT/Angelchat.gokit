@@ -13,6 +13,7 @@ type Request struct {
 	Response struct {
 		Body  interface{}
 		Error error
+		Status int
 	}
 }
 
