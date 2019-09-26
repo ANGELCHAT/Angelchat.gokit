@@ -8,6 +8,6 @@ import (
 
 type Server struct{ *server.Router }
 
-func NewServer() *Server { return &Server{server.NewRouter()} }
+func NewServer() *Server { return &Server{server.New()} }
 
 func (s *Server) Run(addr string) error { return http.ListenAndServe(addr, s) }

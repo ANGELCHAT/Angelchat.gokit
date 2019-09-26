@@ -28,7 +28,15 @@ func (r *Request) Param(name string) string { return mux.Vars(r.Reader)[name] }
 
 func (r *Request) Return(v interface{}, err error) { r.Response.Body, r.Response.Error = v, err }
 
-func Run(addr string, r *Router) error { return http.ListenAndServe(addr, r) }
+type Endpoint interface {
+	Do(*Request)
+}
+
+type EndpointFunc func(*Request)
+
+func (f EndpointFunc) Do(r *Request) { f(r) }
+
+type Middleware func(Endpoint) Endpoint
 
 func Documentation(oo ...docs.Option) *docs.Doc {
 	return docs.Documentation(oo...)

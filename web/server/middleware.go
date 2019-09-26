@@ -13,16 +13,6 @@ var With = middlewares{}
 
 type Logger func(message string, args ...interface{})
 
-type EndpointFunc func(*Request)
-
-func (f EndpointFunc) Do(r *Request) { f(r) }
-
-type Endpoint interface {
-	Do(*Request)
-}
-
-type Middleware func(Endpoint) Endpoint
-
 type middlewares struct{}
 
 func (middlewares) Logger(log Logger) Middleware {

@@ -9,7 +9,7 @@ import (
 
 type Router struct{ mux *mux.Router }
 
-func NewRouter() *Router { return &Router{mux: mux.NewRouter()} }
+func New() *Router { return &Router{mux: mux.NewRouter()} }
 
 func (r *Router) Prefix(prefix string, ms ...Middleware) *Router {
 	pr := r.mux.PathPrefix(prefix).Name(prefix + "prefix").Subrouter()

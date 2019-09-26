@@ -27,7 +27,7 @@ func TestName(t *testing.T) {
 	logger := server.With.Logger(log.Default.Print)
 	json := server.With.JSON("snake")
 
-	r := server.NewRouter()
+	r := server.New()
 	r.
 		Prefix("/chat", test("A"), logger, json).
 		Prefix("/tags", test("B"), test("C")).
