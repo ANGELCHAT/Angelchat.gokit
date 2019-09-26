@@ -2,11 +2,14 @@ package server
 
 import (
 	"encoding/json"
+	"fmt"
 	"net/http"
 
 	"github.com/Rican7/conjson"
 	"github.com/Rican7/conjson/transform"
 )
+
+var With = middlewares{}
 
 type Logger func(message string, args ...interface{})
 
@@ -19,8 +22,6 @@ type Endpoint interface {
 }
 
 type Middleware func(Endpoint) Endpoint
-
-var With = middlewares{}
 
 type middlewares struct{}
 
@@ -68,6 +69,40 @@ func (middlewares) JSON(typ string) Middleware {
 				http.Error(r.Writer, err.Error(), http.StatusInternalServerError)
 				return
 			}
+		})
+	}
+}
+
+func (middlewares) Test(label string) Middleware {
+	return func(n Endpoint) Endpoint {
+		return EndpointFunc(func(r *Request) {
+			fmt.Printf("%s: #1\n", label)
+			{
+				n.Do(r)
+			}
+			fmt.Printf("%s: #2\n", label)
+		})
+	}
+}
+
+// Mtoh convert server.Middleware to standard http Middleware
+func Mtoh(m Middleware) func(http.Handler) http.Handler {
+	return func(n http.Handler) http.Handler {
+		f := EndpointFunc(func(r *Request) { n.ServeHTTP(r.Writer, r.Reader) })
+		return http.HandlerFunc(func(res http.ResponseWriter, req *http.Request) {
+			m(f).Do(requestGet(res, req))
+		})
+	}
+}
+
+// Htom converts standard http Middleware to server.Middleware
+func Htom(m func(http.Handler) http.Handler) Middleware {
+	return func(e Endpoint) Endpoint {
+		f := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			e.Do(requestGet(w, r))
+		})
+		return EndpointFunc(func(r *Request) {
+			m(f).ServeHTTP(r.Writer, r.Reader)
 		})
 	}
 }
