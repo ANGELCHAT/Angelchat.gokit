@@ -8,6 +8,8 @@ import (
 	"github.com/Rican7/conjson/transform"
 )
 
+type Logger func(message string, args ...interface{})
+
 type EndpointFunc func(*Request)
 
 func (f EndpointFunc) Do(r *Request) { f(r) }
@@ -21,8 +23,6 @@ type Middleware func(Endpoint) Endpoint
 var With = middlewares{}
 
 type middlewares struct{}
-
-type Logger func(message string, args ...interface{})
 
 func (middlewares) Logger(log Logger) Middleware {
 	return func(n Endpoint) Endpoint {
