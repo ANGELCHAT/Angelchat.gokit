@@ -80,7 +80,7 @@ func (m *Middleware) AuthenticatedAs(licenses ...string) func(http.Handler) http
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			var license string
 
-			if license = r.Header.Get("sso-license"); license == "" {
+			if license = r.Header.Get("sso-license"); license == "" || license == "0" {
 				http.Error(w, "no account found", http.StatusForbidden)
 				return
 			}
