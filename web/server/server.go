@@ -34,14 +34,15 @@ func (r *Service) Handle(path string, e EndpointFunc, method string, ms ...Middl
 	return r
 }
 
+//TODO
 func (r *Service) HandleFunc(path string, e http.HandlerFunc, method string, ms ...Middleware) *Service {
-	var h http.Handler = e
-	for i := len(ms) - 1; i >= 0; i-- {
-		h = ms[i](h)
-	}
-
-	rh := r.mux.Handle(path, h)
-	rh.Methods(method)
+	//var h http.Handler = e
+	//for i := len(ms) - 1; i >= 0; i-- {
+	//	h = ms[i](h)
+	//}
+	//
+	//rh := r.mux.Handle(path, h)
+	//rh.Methods(method)
 
 	return r
 }
