@@ -7,13 +7,8 @@ import (
 )
 
 type Request struct {
-	Reader   *http.Request
-	Writer   http.ResponseWriter
-	Response struct {
-		Body   interface{}
-		Error  error
-		Status int
-	}
+	Reader *http.Request
+	Writer *writer
 }
 
 func (r *Request) Query(name string, otherwise ...string) string {
@@ -24,12 +19,19 @@ func (r *Request) Query(name string, otherwise ...string) string {
 	return out
 }
 
-func (r *Request) Param(name string) string { return mux.Vars(r.Reader)[name] }
+func (r *Request) Param(name string) string           { return mux.Vars(r.Reader)[name] }
+func (r *Request) Response(body interface{}) *Request { r.Writer.body = body; return r }
+func (r *Request) Error(err error) *Request           { r.Writer.err = err; ; return r }
 
-func (r *Request) Return(v interface{}, err error) {
-	if err != nil {
-		r.Response.Error = err
-	}
-
-	r.Response.Body = v
+type writer struct {
+	r      http.ResponseWriter
+	err    error
+	body   interface{}
+	status int
 }
+
+func (w *writer) Header() http.Header { return w.r.Header() }
+
+func (w *writer) Write(b []byte) (int, error) { return w.r.Write(b) }
+
+func (w *writer) WriteHeader(statusCode int) { w.status = statusCode; w.r.WriteHeader(statusCode) }

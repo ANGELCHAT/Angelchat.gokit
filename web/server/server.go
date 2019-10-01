@@ -54,14 +54,14 @@ func (r *Service) ServeHTTP(res http.ResponseWriter, req *http.Request) {
 func (r *Service) Do(req *Request) {}
 
 func getRequest(res http.ResponseWriter, req *http.Request) *Request {
-	r := req.Context().Value(&rkey).(*Request)
-	r.Reader = req
-	r.Writer = res
-	return r
+	return req.Context().Value(&rkey).(*Request)
 }
 
-func setRequest(_ http.ResponseWriter, req *http.Request) *http.Request {
-	return req.WithContext(context.WithValue(req.Context(), &rkey, &Request{}))
+func setRequest(res http.ResponseWriter, req *http.Request) *http.Request {
+	r := &Request{}
+	r.Reader = req.WithContext(context.WithValue(req.Context(), &rkey, r))
+	r.Writer = &writer{r: res}
+	return r.Reader
 }
 
 var rkey = "covered-request"
