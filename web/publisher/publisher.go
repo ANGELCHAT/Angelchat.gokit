@@ -5,14 +5,13 @@ import (
 	"encoding/json"
 	"fmt"
 	"net/http"
-	"os"
 
-	wlog "github.com/livechat/gokit/log"
+	"github.com/livechat/gokit/log"
 )
 
 const tag = "publisher"
 
-var log = wlog.New(os.Stdout, tag, true)
+var logs = log.Default.WithTag(tag).Print
 
 type Publisher struct {
 	send chan data
@@ -30,30 +29,30 @@ func (d *Publisher) Publish(url string, v interface{}) {
 func (d *Publisher) run() {
 	for e := range d.send {
 		if len(e.url) == 0 {
-			log.Print("%s", fmt.Errorf("no url"))
+			logs("%s", fmt.Errorf("no url"))
 			continue
 		}
 
 		data, err := json.Marshal(e.data)
 		if err != nil {
-			log.Print("json.Marshal failed due %s", err)
+			logs("json.Marshal failed due %s", err)
 			continue
 		}
 
 		res, err := http.Post(e.url, "application/json", bytes.NewReader(data))
 		if err != nil {
-			log.Print("http.POST failed due %s", err)
+			logs("http.POST failed due %s", err)
 			continue
 		}
 
 		res.Body.Close()
 
 		if res.StatusCode < http.StatusOK || res.StatusCode >= http.StatusBadRequest {
-			log.Print("%s", fmt.Errorf("received %d status from %s", res.StatusCode, e.url))
+			logs("%s", fmt.Errorf("received %d status from %s", res.StatusCode, e.url))
 			continue
 		}
 
-		log.Print("data send to %s", e.url)
+		logs("data send to %s", e.url)
 	}
 }
 

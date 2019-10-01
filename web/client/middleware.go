@@ -9,9 +9,9 @@ import (
 	"net/http/httptrace"
 	"net/url"
 	"time"
-
-	"github.com/livechat/gokit/log"
 )
+
+type Logger = func(message string, args ...interface{})
 
 // Middleware wraps Endpoint with extra behavior such as logging, decoding, encoding,
 // authentication, error handling, tracing...
@@ -183,17 +183,17 @@ func Header(k, v string) Middleware {
 }
 
 // Logging
-func Logging(logger log.Logger) Middleware {
+func Logging(log Logger) Middleware {
 
 	return func(e Endpoint) Endpoint {
 		return EndpointFunc(func(r *http.Request) (*http.Response, error) {
 			res, err := e.Do(r)
 
-			logger.Print("HTTP.request.url [%s] %s", r.Method, r.URL)
-			logger.Print("HTTP.request.headers %v", r.Header)
+			log("HTTP.request.url", "[%s] %s", r.Method, r.URL)
+			log("HTTP.request.headers", "%v", r.Header)
 			in := r.Context().Value("in")
 			if in != nil {
-				logger.Print("HTTP.request.body %v", in)
+				log("HTTP.request.body", "%v", in)
 			}
 
 			if res != nil {
@@ -203,10 +203,10 @@ func Logging(logger log.Logger) Middleware {
 				res.Body = ioutil.NopCloser(b)
 
 				o, _ := ioutil.ReadAll(s)
-				logger.Print("HTTP.response.status %v", res.Status)
-				logger.Print("HTTP.response.headers %v", res.Header)
-				logger.Print("HTTP.response.size %.2fKB", float64(len(o))/1024)
-				logger.Print("HTTP.response.body %s\n", string(o))
+				log("HTTP.response.status", "%v", res.Status)
+				log("HTTP.response.headers", "%v", res.Header)
+				log("HTTP.response.size", "%.2fKB", float64(len(o))/1024)
+				log("HTTP.response.body", "%s\n", string(o))
 			}
 
 			return res, err
@@ -217,7 +217,7 @@ func Logging(logger log.Logger) Middleware {
 // Trace gives detailed information about HTTP call, it will look and measure
 // all the HTTP parts such as tcp connection, dns lookup, tlc handshaking and
 // body transfer.
-func Trace(fn func(TraceInfo), log log.Logger) Middleware {
+func Trace(fn func(TraceInfo), log Logger) Middleware {
 	return func(e Endpoint) Endpoint {
 		return EndpointFunc(func(r *http.Request) (*http.Response, error) {
 			var t0, t1, t2, t3, t4 time.Time
@@ -238,7 +238,7 @@ func Trace(fn func(TraceInfo), log log.Logger) Middleware {
 				},
 				ConnectDone: func(net, addr string, err error) {
 					if err != nil {
-						log.Print("HTTP.trace.details unable connect to host %v: %v", addr, err)
+						log("HTTP.trace.details", "unable connect to host %v: %v", addr, err)
 					}
 					t2 = time.Now()
 				},
@@ -253,7 +253,7 @@ func Trace(fn func(TraceInfo), log log.Logger) Middleware {
 			res, err := e.Do(r)
 
 			if err != nil {
-				log.Print("HTTP.trace.details.error %s", err.Error())
+				log("HTTP.trace.details.error", err.Error())
 				return res, err
 			}
 
@@ -303,14 +303,14 @@ func Trace(fn func(TraceInfo), log log.Logger) Middleware {
 				token = token[:8]
 			}
 
-			log.Print("HTTP.trace.details"+
+			log("HTTP.trace.details",
 				"\n\ttime: %s\n"+
-				"\tdns: %s\n"+
-				"\ttcp: %s\n"+
-				"\ttls: %s\n"+
-				"\tserver_processing: %s\n"+
-				"\tcontent_read: %s\n"+
-				"\ttotal: %s -> %s",
+					"\tdns: %s\n"+
+					"\ttcp: %s\n"+
+					"\ttls: %s\n"+
+					"\tserver_processing: %s\n"+
+					"\tcontent_read: %s\n"+
+					"\ttotal: %s -> %s",
 				ti.Timestamp.Format("2006-01-02 15:04:05.000"),
 				ti.DNSLookup,
 				ti.TCPConnection,
