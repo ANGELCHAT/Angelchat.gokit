@@ -1,50 +1,66 @@
 package server
 
 import (
+	"context"
 	"net/http"
 
 	"github.com/gorilla/mux"
-	"github.com/livechat/gokit/web/server/docs"
 )
 
-type Request struct {
-	Reader   *http.Request
-	Writer   http.ResponseWriter
-	Response struct {
-		Body  interface{}
-		Error error
-		Status int
-	}
-}
+type Service struct{ mux *mux.Router }
 
-func (r *Request) Query(name string, otherwise ...string) string {
-	out := r.Reader.URL.Query().Get(name)
-	if out == "" && len(otherwise) > 0 {
-		return otherwise[0]
-	}
-	return out
-}
+func New() *Service { return &Service{mux: mux.NewRouter()} }
 
-func (r *Request) Param(name string) string { return mux.Vars(r.Reader)[name] }
+func (r *Service) Prefix(prefix string, ms ...Middleware) *Service {
+	pr := r.mux.PathPrefix(prefix).Name(prefix + "prefix").Subrouter()
 
-func (r *Request) Return(v interface{}, err error) {
-	if err != nil {
-		r.Response.Error = err
+	for _, m := range ms {
+		pr.Use(Mtoh(m))
 	}
 
-	r.Response.Body = v
+	return &Service{mux: pr}
 }
 
-type Endpoint interface {
-	Do(*Request)
+func (r *Service) Handle(path string, e EndpointFunc, method string, ms ...Middleware) *Service {
+	var h Endpoint = e
+	for i := len(ms) - 1; i >= 0; i-- {
+		h = ms[i](h)
+	}
+
+	f := func(res http.ResponseWriter, req *http.Request) { h.Do(getRequest(res, req)) }
+	rh := r.mux.Handle(path, http.HandlerFunc(f))
+	rh.Methods(method)
+
+	return r
 }
 
-type EndpointFunc func(*Request)
+func (r *Service) HandleFunc(path string, e http.HandlerFunc, method string, ms ...Middleware) *Service {
+	var h http.Handler = e
+	for i := len(ms) - 1; i >= 0; i-- {
+		h = ms[i](h)
+	}
 
-func (f EndpointFunc) Do(r *Request) { f(r) }
+	rh := r.mux.Handle(path, h)
+	rh.Methods(method)
 
-type Middleware func(Endpoint) Endpoint
-
-func Documentation(oo ...docs.Option) *docs.Doc {
-	return docs.Documentation(oo...)
+	return r
 }
+
+func (r *Service) ServeHTTP(res http.ResponseWriter, req *http.Request) {
+	r.mux.ServeHTTP(res, setRequest(res, req))
+}
+
+func (r *Service) Do(req *Request) {}
+
+func getRequest(res http.ResponseWriter, req *http.Request) *Request {
+	r := req.Context().Value(&rkey).(*Request)
+	r.Reader = req
+	r.Writer = res
+	return r
+}
+
+func setRequest(_ http.ResponseWriter, req *http.Request) *http.Request {
+	return req.WithContext(context.WithValue(req.Context(), &rkey, &Request{}))
+}
+
+var rkey = "covered-request"

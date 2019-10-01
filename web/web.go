@@ -6,7 +6,7 @@ import (
 	"github.com/livechat/gokit/web/server"
 )
 
-type Server struct{ *server.Router }
+type Server struct{ *server.Service }
 
 func NewServer() *Server { return &Server{server.New()} }
 

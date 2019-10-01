@@ -11,7 +11,10 @@ import (
 
 var With middleware
 
-type Logger func(message string, args ...interface{})
+type (
+	Logger     func(message string, args ...interface{})
+	Middleware func(Endpoint) Endpoint
+)
 
 type middleware struct{}
 

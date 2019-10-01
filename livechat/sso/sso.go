@@ -17,7 +17,7 @@ var ErrInsufficientScopes = errors.New("insufficient scopes")
 type API struct {
 	url    *url.URL
 	client proto.SSOAPIClient
-	HTTP   *HTTP
+	*Middleware
 }
 
 func New(host string) (*API, error) {
@@ -34,7 +34,7 @@ func New(host string) (*API, error) {
 
 	a.url = u
 	a.client = proto.NewSSOAPIClient(c)
-	a.HTTP = &HTTP{&a}
+	a.Middleware = &Middleware{&a}
 
 	return &a, nil
 }
