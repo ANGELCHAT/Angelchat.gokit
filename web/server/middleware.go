@@ -58,6 +58,7 @@ func (middleware) JSON(typ string) Middleware {
 			}
 
 			r.Writer.Header().Set("content-type", "application/json")
+			r.Writer.WriteHeader(http.StatusOK)
 			_, r.Writer.err = b.WriteTo(r.Writer)
 		})
 	}

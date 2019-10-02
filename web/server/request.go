@@ -19,9 +19,13 @@ func (r *Request) Query(name string, otherwise ...string) string {
 	return out
 }
 
-func (r *Request) Param(name string) string           { return mux.Vars(r.Reader)[name] }
-func (r *Request) Response(body interface{}) *Request { r.Writer.body = body; return r }
-func (r *Request) Error(err error) *Request           { r.Writer.err = err; ; return r }
+func (r *Request) Read(body interface{}) *Request {
+	return r
+}
+
+func (r *Request) Param(name string) string        { return mux.Vars(r.Reader)[name] }
+func (r *Request) Write(body interface{}) *Request { r.Writer.body = body; return r }
+func (r *Request) Error(err error) *Request        { r.Writer.err = err; ; return r }
 
 type writer struct {
 	r      http.ResponseWriter
