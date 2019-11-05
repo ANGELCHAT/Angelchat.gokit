@@ -7,35 +7,36 @@ import (
 )
 
 type Request struct {
-	Reader *http.Request
-	Writer *writer
+	writer http.ResponseWriter
+	reader *http.Request
+	err    error
+	body   interface{}
+	status int
+}
+
+func (r *Request) Header() http.Header { return r.writer.Header() }
+
+func (r *Request) Write(b []byte) (int, error) { return r.writer.Write(b) }
+
+func (r *Request) WriteHeader(statusCode int) {
+	r.status = statusCode
+	r.writer.WriteHeader(statusCode)
 }
 
 func (r *Request) Query(name string, otherwise ...string) string {
-	out := r.Reader.URL.Query().Get(name)
+	out := r.reader.URL.Query().Get(name)
 	if out == "" && len(otherwise) > 0 {
 		return otherwise[0]
 	}
 	return out
 }
 
+func (r *Request) Param(name string) string { return mux.Vars(r.reader)[name] }
+
 func (r *Request) Read(body interface{}) *Request {
 	return r
 }
 
-func (r *Request) Param(name string) string        { return mux.Vars(r.Reader)[name] }
-func (r *Request) Write(body interface{}) *Request { r.Writer.body = body; return r }
-func (r *Request) Error(err error) *Request        { r.Writer.err = err; ; return r }
+func (r *Request) Response(body interface{}) *Request { r.body = body; return r }
 
-type writer struct {
-	r      http.ResponseWriter
-	err    error
-	body   interface{}
-	status int
-}
-
-func (w *writer) Header() http.Header { return w.r.Header() }
-
-func (w *writer) Write(b []byte) (int, error) { return w.r.Write(b) }
-
-func (w *writer) WriteHeader(statusCode int) { w.status = statusCode; w.r.WriteHeader(statusCode) }
+func (r *Request) Error(err error) *Request { r.err = err; return r }

@@ -3,7 +3,6 @@ package server
 import (
 	"bytes"
 	"encoding/json"
-	"fmt"
 	"net/http"
 
 	"github.com/Rican7/conjson"
@@ -14,21 +13,24 @@ var With middleware
 
 type (
 	Logger     func(message string, args ...interface{})
-	Middleware func(Endpoint) Endpoint
+	Middleware = func(http.Handler) http.Handler
 )
 
 type middleware struct{}
 
 func (middleware) Logger(log Logger) Middleware {
-	return func(n Endpoint) Endpoint {
-		return EndpointFunc(func(r *Request) {
+	return func(next http.Handler) http.Handler {
+		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			//n.ServeHTTP()
-			u := r.Reader.URL.String()
-			m := r.Reader.Method
+			u := r.URL.String()
+			m := r.Method
 
-			n.Do(r)
+			next.ServeHTTP(w, r)
 
-			log("%s [%d] %s", m, r.Writer.status, u)
+			if w, ok := w.(*Request); ok {
+				log("%s [%d] %s", m, w.status, u)
+			}
+
 		})
 	}
 }
@@ -43,23 +45,28 @@ func (middleware) JSON(typ string) Middleware {
 		t = transform.CamelCaseKeys(true)
 	}
 
-	return func(next Endpoint) Endpoint {
-		return EndpointFunc(func(r *Request) {
-			next.Do(r)
+	return func(next http.Handler) http.Handler {
+		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			next.ServeHTTP(w, r)
 
-			if r.Writer.err != nil || r.Writer.status >= 400 {
+			rw, ok := w.(*Request)
+			if !ok {
+				return
+			}
+
+			if rw.err != nil || rw.status >= 400 {
 				return
 			}
 
 			var b bytes.Buffer
-			r.Writer.err = conjson.NewEncoder(json.NewEncoder(&b), t).Encode(r.Writer.body)
-			if r.Writer.err != nil {
+			rw.err = conjson.NewEncoder(json.NewEncoder(&b), t).Encode(rw.body)
+			if rw.err != nil {
 				return
 			}
 
-			r.Writer.Header().Set("content-type", "application/json")
-			r.Writer.WriteHeader(http.StatusOK)
-			_, r.Writer.err = b.WriteTo(r.Writer)
+			rw.Header().Set("content-type", "application/json")
+			rw.WriteHeader(http.StatusOK)
+			_, rw.err = b.WriteTo(rw)
 		})
 	}
 }
@@ -69,47 +76,20 @@ func (middleware) Error(f func(error) (string, int)) Middleware {
 		f = func(err error) (string, int) { return err.Error(), http.StatusBadRequest }
 	}
 
-	return func(next Endpoint) Endpoint {
-		return EndpointFunc(func(r *Request) {
-			next.Do(r)
+	return func(next http.Handler) http.Handler {
+		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			next.ServeHTTP(w, r)
 
-			if r.Writer.err != nil && r.Writer.status == 0 {
-				message, status := f(r.Writer.err)
-				http.Error(r.Writer, message, status)
+			rw, ok := w.(*Request)
+			if !ok {
 				return
 			}
-		})
-	}
-}
 
-func (middleware) Test(label string) Middleware {
-	return func(n Endpoint) Endpoint {
-		return EndpointFunc(func(r *Request) {
-			fmt.Printf("%s: #1\n", label)
-			{
-				n.Do(r)
+			if rw.err != nil && rw.status == 0 {
+				message, status := f(rw.err)
+				http.Error(rw, message, status)
+				return
 			}
-			fmt.Printf("%s: #2\n", label)
-		})
-	}
-}
-
-// Mtoh convert server.Middleware to standard http Middleware
-func Mtoh(m Middleware) func(http.Handler) http.Handler {
-	return func(n http.Handler) http.Handler {
-		f := EndpointFunc(func(r *Request) { n.ServeHTTP(r.Writer, r.Reader) })
-		return http.HandlerFunc(func(res http.ResponseWriter, req *http.Request) {
-			m(f).Do(getRequest(res, req))
-		})
-	}
-}
-
-// Htom converts standard http Middleware to server.Middleware
-func Htom(m func(http.Handler) http.Handler) Middleware {
-	return func(e Endpoint) Endpoint {
-		f := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) { e.Do(getRequest(w, r)) })
-		return EndpointFunc(func(r *Request) {
-			m(f).ServeHTTP(r.Writer, r.Reader)
 		})
 	}
 }
