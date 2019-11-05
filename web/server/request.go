@@ -9,6 +9,7 @@ import (
 type Request struct {
 	writer http.ResponseWriter
 	reader *http.Request
+
 	err    error
 	body   interface{}
 	status int

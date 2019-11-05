@@ -39,5 +39,5 @@ func (r *Service) Handle(path string, e http.HandlerFunc, method string, ms ...M
 }
 
 func (r *Service) ServeHTTP(res http.ResponseWriter, req *http.Request) {
-	r.mux.ServeHTTP(&Request{writer: res}, req)
+	r.mux.ServeHTTP(&Request{writer: res, reader: req}, req)
 }
