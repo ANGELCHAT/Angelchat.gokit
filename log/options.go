@@ -8,93 +8,144 @@ import (
 	"os"
 	"path"
 	"runtime"
+	"strings"
 	"time"
 )
 
-type options struct {
-	writer io.Writer
-	syslog syslog.Priority
-	//printer  Printer
-	override bool
+type (
+	Tag      struct{ Name, Value string }
+	Tagger   func(message []byte, args ...interface{}) Tag
+	Renderer func(io.Writer, ...Tag) error
+	Option   func(*logger)
+)
 
-	//todo
-	//  use templates such as {TIME-FORMAT}, {PREFIX}, {FILE-NAME}{FILE-LINE}...
-	decorators []Decorator
+func construct(configurations ...Option) *logger {
+	var c logger
+	var err error
+
+	for i := range configurations {
+		configurations[i](&c)
+	}
+
+	c.taggers = append(c.taggers, func(m []byte, args ...interface{}) Tag {
+		return Tag{"message", fmt.Sprintf(string(m), args...)}
+	})
+
+	if c.syslog != 0 {
+		if c.writer, err = syslog.New(c.syslog, ""); err != nil {
+			fallback.Print(err)
+		}
+	}
+
+	if c.writer == nil {
+		c.writer = os.Stdout
+	}
+
+	if c.global {
+		log.SetFlags(0)
+		log.SetOutput(&c)
+		standard = &c
+	}
+
+	if c.render == nil {
+		c.render = writer
+	}
+
+	return &c
 }
 
-type Decorator func(message string, args ...interface{}) string
+func WithGlobal(b bool) Option { return func(o *logger) { o.global = b } }
 
-type Option func(*options)
-
-func WithWriter(w io.Writer) Option { return func(o *options) { o.writer = w } }
-
-func WithSyslog(p syslog.Priority) Option { return func(o *options) { o.syslog = p } }
-
-//func WithPrinter(p Printer) Option  { return func(o *options) { o.printer = p } }
-func WithOverride(b bool) Option { return func(o *options) { o.override = b } }
-
-func WithTag(name string) Option {
-	return func(o *options) {
-		o.decorators = append(o.decorators, func(m string, _ ...interface{}) string {
-			return fmt.Sprintf("%s %s", name, m)
+func WithName(n string) Option {
+	return func(o *logger) {
+		o.taggers = append(o.taggers, func([]byte, ...interface{}) Tag {
+			return Tag{"name", n}
 		})
 	}
 }
 
-func WithLevels(verbose bool) Option {
-	return func(o *options) {
-		o.decorators = append(o.decorators, func(m string, args ...interface{}) string {
-			s := len(m)
-			if s < 1 {
-				return m
-			}
+func WithVerbose(v bool) Option {
+	return func(o *logger) {
+		if !v {
+			//for i := range o.taggers {
+			//	o.taggers[i].
+			//}
+			//delete(o.taggers, "verbose")
+			return
+		}
+		o.taggers = append(o.taggers, func([]byte, ...interface{}) Tag {
+			return Tag{Name: "verbose"}
+		})
+	}
+}
 
+func WithLevels(colors bool) Option {
+	color := func(level string) string {
+		if colors {
+			switch level {
+			case "INF":
+				return "\x1b[32;1mINF\x1b[0m" // green
+			case "ERR":
+				return "\x1b[31;1mERR\x1b[0m"
+			case "DBG":
+				return "\x1b[33;1mDBG\x1b[0m"
+			case "EMG":
+				return "\x1b[34;1mEMG\x1b[0m"
+			case "WRN":
+				return "\x1b[36;1mWRN\x1b[0m"
+			}
+		}
+
+		return level
+	}
+
+	return func(o *logger) {
+		o.taggers = append(o.taggers, func(message []byte, args ...interface{}) Tag {
+			var size = len(message)
 			var level string
 
-			switch m[s-1 : s] {
-			case ".":
-				level = "INF"
+			for i := range args {
+				if _, ok := args[i].(error); !ok {
+					continue
+				}
 
-			case "?":
-				level = "WRN"
+				return Tag{"level", color("ERR")}
+			}
 
-			case ";":
-				level = "EMG"
+			if size == 0 {
+				return Tag{"level", "INF"}
+			}
 
-			case "!":
-				level = "ERR"
-
-			default:
+			switch message[size-1:][0] {
+			case '.':
 				level = "DBG"
-				for i := range args {
-					if _, ok := args[i].(error); ok {
-						level = "ERR"
-						break
-					}
-				}
-				s++
+			case '?':
+				level = "WRN"
+			case ';':
+				level = "EMG"
+			case '!':
+				level = "ERR"
+			default:
+				level = "INF"
 			}
 
-			if !verbose {
-				if level == "INF" || level == "ERR" {
-					return fmt.Sprintf("[%s] %s", level, m[:s-1])
-				}
-				return ""
+			if level != "INF" {
+				message[size-1] = ' '
 			}
 
-			return fmt.Sprintf("[%s] %s", level, m[:s-1])
+			return Tag{"level", color(level)}
 		})
 	}
 }
 
-// TODO automatically find where log method has been called.
 func WithFilename(depth int) Option {
-	return func(o *options) {
-		o.decorators = append(o.decorators, func(m string, _ ...interface{}) string {
-			if depth <= 0 {
-				return m
-			}
+	// TODO automatically find where log method has been called.
+	return func(o *logger) {
+		if depth <= 0 {
+			return
+		}
 
+		o.taggers = append(o.taggers, func([]byte, ...interface{}) Tag {
 			//t := true
 			//for n := 0; t; n++ {
 			//	_, file, line, ok := runtime.Caller(n)
@@ -108,43 +159,75 @@ func WithFilename(depth int) Option {
 			//https://stackoverflow.com/questions/35212985/is-it-possible-get-information-about-caller-function-in-golang
 			_, file, line, _ := runtime.Caller(depth)
 
-			return fmt.Sprintf("%s %s:%d", m, path.Base(file), line)
+			return Tag{"file", fmt.Sprintf("%s:%d", path.Base(file), line)}
 		})
 	}
 }
 
 func WithTime(format string) Option {
-	return func(o *options) {
-		o.decorators = append(o.decorators, func(m string, _ ...interface{}) string {
-			return fmt.Sprintf("%s %s", time.Now().Format(format), m)
+	return func(o *logger) {
+		o.taggers = append(o.taggers, func([]byte, ...interface{}) Tag {
+			return Tag{"time", time.Now().Format(format)}
 		})
 	}
 }
 
-func WithDecorator(d Decorator) Option {
-	return func(o *options) {
-		o.decorators = append(o.decorators, d)
-	}
+func WithRenderer(r Renderer) Option {
+	return func(o *logger) { o.render = r }
 }
 
-func construct(w io.Writer, configurations ...Option) *options {
-	o := &options{writer: w, override: true}
+func WithTagger(t ...Tagger) Option {
+	return func(o *logger) { o.taggers = append(o.taggers, t...) }
+}
 
-	for i := range configurations {
-		configurations[i](o)
+func WithWriter(w io.Writer) Option { return func(o *logger) { o.writer = w } }
+
+func WithSyslog(p syslog.Priority) Option { return func(o *logger) { o.syslog = p } }
+
+func writer(w io.Writer, tags ...Tag) error {
+	//for i := range tags {
+	//	fmt.Print(tags[i])
+	//}
+	//fmt.Println()
+
+	var (
+		message string
+		verbose bool
+	)
+
+	for _, t := range tags {
+		if t.Name == "" {
+			continue
+		}
+
+		switch t.Name {
+		case "verbose":
+			verbose = true
+			continue
+		}
+
+		if t.Value == "" {
+			continue
+		}
+
+		message += fmt.Sprintf("%s ", t.Value)
 	}
 
-	if o.syslog != 0 {
-		o.writer, _ = syslog.New(o.syslog, "")
+	if verbose {
+		//fmt.Println("verbo!")
 	}
 
-	if o.writer == nil {
-		o.writer = os.Stdout
-	}
+	message = strings.TrimSpace(message) + "\n"
 
-	if o.override {
-		log.SetOutput(o.writer)
-	}
+	//var _, verbose = t["verbose"]
+	//var level = t["level"]
+	//
+	//if !verbose && level != "DBG" && level != "ERR" {
+	//	return
+	//}
+	//message := fmt.Sprintf("%s %s%s %s %s %s\n", t["name"], t["time"], t["a"], t["file"], t["level"], t["message"])
 
-	return o
+	_, err := w.Write([]byte(message))
+
+	return err
 }
